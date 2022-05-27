@@ -90,7 +90,7 @@ let shrink_decl ty_ctr ctrs iargs =
   debug_coq_expr shrink_fun;
   gRecord [("shrink", shrink_fun)]
 
-let show_decl ty_ctr ctrs _iargs =
+let show_decl ty_ctr ctrs _iargs rec_ind =
   msg_debug (str "Deriving Show Information:" ++ fnl ());
   msg_debug (str ("Type constructor is: " ^ ty_ctr_to_string ty_ctr) ++ fnl ());
   msg_debug (str (str_lst_to_string "\n" (List.map ctr_rep_to_string ctrs)) ++ fnl());
@@ -112,9 +112,12 @@ let show_decl ty_ctr ctrs _iargs =
                                                 (fun s1 s2 -> if s2 = emptyString then s1 else str_appends [s1; gStr " "; s2]) emptyString ty vs))
     in
     
-    gRecFunIn "aux" ["x'"]
-              (fun (aux, [x']) -> gMatch (gVar x') (List.map (branch aux) ctrs))
-              (fun aux -> gApp (gVar aux) [gVar x])
+    if rec_ind then
+      gRecFunIn "aux" ["x_"]
+        (fun (aux, [x_]) -> gMatch (gVar x_) (List.map (branch aux) ctrs))
+        (fun aux -> gApp (gVar aux) [gVar x])
+    else
+      gMatch (gVar x) (List.map (branch x) ctrs)
   in
   
   let show_fun = gFun ["x"] (fun [x] -> show_body x) in

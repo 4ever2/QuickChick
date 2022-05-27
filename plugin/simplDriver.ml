@@ -7,6 +7,7 @@ open Sized
 open SizeMon
 open SizeSMon
 open SizeCorr
+open Declarations
 
 open ArbitrarySized
 
@@ -42,6 +43,14 @@ let repeat_instance_name der tn =
 
 (* Generic derivation function *)
 let derive (cn : derivable) (c : constr_expr) (instance_name : string) (name1 : string) (name2 : string) =
+  let r = match c with
+    | { CAst.v = CRef (r,_);_ } -> r
+    | _ -> failwith "Not a reference"
+  in
+  let mib = qualid_to_mib r in
+  let rec_ind = match mib.mind_finite with
+    | Declarations.BiFinite -> false
+    | _ -> true in
 
   let (ty_ctr, ty_params, ctrs) =
     match coerce_reference_to_dt_rep c with
@@ -122,7 +131,7 @@ let derive (cn : derivable) (c : constr_expr) (instance_name : string) (name1 : 
   let instance_record iargs =
     (* Copying code for Arbitrary, Sized from derive.ml *)
     match cn with
-    | Show -> show_decl ty_ctr ctrs iargs 
+    | Show -> show_decl ty_ctr ctrs iargs rec_ind
     | Shrink -> shrink_decl ty_ctr ctrs iargs
     | GenSized -> arbitrarySized_decl ty_ctr ctrs iargs
     | Sized -> sized_decl ty_ctr ctrs
