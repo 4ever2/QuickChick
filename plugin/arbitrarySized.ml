@@ -56,7 +56,7 @@ let arbitrarySized_decl ty_ctr ctrs iargs =
 
 
 (** Shrinking Derivation *)
-let shrink_decl ty_ctr ctrs iargs =
+let shrink_decl ty_ctr ctrs iargs rec_ind =
 
   let isCurrentTyCtr = function
     | TyCtr (ty_ctr', _) -> ty_ctr = ty_ctr'
@@ -79,10 +79,13 @@ let shrink_decl ty_ctr ctrs iargs =
            lst_append list_nil ty) in
 
       let aux_shrink_body rec_fun x' = gMatch (gVar x') (List.map (create_branch rec_fun) ctrs) in
-
-      gRecFunIn "aux_shrink" ["x'"]
-        (fun (aux_shrink, [x']) -> aux_shrink_body aux_shrink x')
-        (fun aux_shrink -> gApp (gVar aux_shrink) [gVar x])
+      
+      if rec_ind then
+        gRecFunIn "aux_shrink" ["x'"]
+          (fun (aux_shrink, [x']) -> aux_shrink_body aux_shrink x')
+          (fun aux_shrink -> gApp (gVar aux_shrink) [gVar x])
+      else
+        aux_shrink_body x x
     in
     (* Create the function body by recursing on the structure of x *)
     gFun ["x"] (fun [x] -> shrink_body x)

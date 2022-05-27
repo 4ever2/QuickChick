@@ -132,7 +132,7 @@ let derive (cn : derivable) (c : constr_expr) (instance_name : string) (name1 : 
     (* Copying code for Arbitrary, Sized from derive.ml *)
     match cn with
     | Show -> show_decl ty_ctr ctrs iargs rec_ind
-    | Shrink -> shrink_decl ty_ctr ctrs iargs
+    | Shrink -> shrink_decl ty_ctr ctrs iargs rec_ind
     | GenSized -> arbitrarySized_decl ty_ctr ctrs iargs
     | Sized -> sized_decl ty_ctr ctrs
     | CanonicalSized ->
