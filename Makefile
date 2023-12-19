@@ -79,6 +79,7 @@ tests:
 
 COMPATFILES:= \
 	plugin/depDriver.ml \
+	plugin/driver.mlg \
 	plugin/genericLib.ml \
 	plugin/mergeTypes.ml \
 	plugin/quickChick.mli \

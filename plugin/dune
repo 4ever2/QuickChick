@@ -37,6 +37,10 @@
 
 (rule
   (alias compat)
+  (target driver.mlg)
+  (action (run %{exe:../scripts/mycppo} %{dep:driver.mlg.cppo} %{target})))
+(rule
+  (alias compat)
   (target depDriver.ml)
   (action (run %{exe:../scripts/mycppo} %{dep:depDriver.ml.cppo} %{target})))
 (rule
