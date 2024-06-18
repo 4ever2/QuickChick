@@ -1,10 +1,7 @@
-Require Import List.
+From Coq Require Import List String Ascii Lia Arith.
 Import ListNotations.
-Require Import Coq.Strings.String.
-Require Import Coq.Strings.Ascii.
-Require Import Lia Arith.
 
-Require Import QuickChick.Show.
+From QuickChick Require Import Compat Show.
 
 (* Proof that Show for string round-trips. *)
 
@@ -51,13 +48,13 @@ Proof.
   rewrite <- Nat.mul_add_distr_r.
   rewrite Nat.mul_comm.
   rewrite Nat.mul_cancel_l; auto.
-  rewrite <- Nat.div_div; auto.
+  rewrite <- Nat.div_div.
   rewrite (Nat.div_mod (n/10) 10) at 3; auto.
   rewrite Nat.add_cancel_r.
   rewrite Nat.mul_comm.
   rewrite Nat.mul_cancel_l; auto.
   rewrite Nat.mod_small; auto.
-  rewrite Nat.div_div; auto.
+  rewrite Nat.div_div.
   simpl.
   rewrite (Nat.div_lt_upper_bound n 100 9); auto.
   lia.

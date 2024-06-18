@@ -1,5 +1,8 @@
-QuickChick [![CircleCI](https://circleci.com/gh/QuickChick/QuickChick.svg?style=svg)](https://circleci.com/gh/QuickChick/QuickChick)
+QuickChick
 ==========
+
+[![CircleCI](https://circleci.com/gh/QuickChick/QuickChick.svg?style=svg)](https://circleci.com/gh/QuickChick/QuickChick)
+[![project chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://coq.zulipchat.com/#narrow/stream/237977-Coq-users)
 
 ## Description
  
@@ -33,28 +36,6 @@ https://lemonidas.github.io/pdf/GeneratingGoodGenerators.pdf
     # Install the coq-quickchick opam package
     opam install coq-quickchick
 
-### From source
-
-Dependencies are listed in [`coq-quickchick.opam`](./coq-quickchick.opam).
-
-    # To get the dependencies, add the Coq opam repository if you haven't already
-    opam repo add coq-released https://coq.inria.fr/opam/released
-    opam update
-    opam install . --deps-only
-
-#### Build using Make
-
-    make
-
-    # To install the package:
-    # (proceed with caution: this will clobber your `.opam` directory)
-    make install
-
-### Build using Dune
-
-    make compat
-    dune build
-
 ## Simple Examples
 
   - `examples/Tutorial.v`
@@ -67,7 +48,7 @@ If successful, you should see "success" at the end.
 
 ## Documentation
 
-The public API of QuickChick is summarized in `BasicInterface.v`.
+The public API of QuickChick is summarized in `QuickChickInterface.v`.
 
 ### Top-level Commands
 
@@ -98,3 +79,30 @@ Here is some more reading material:
   - Zoe's [thesis defense at NTU Athens (2014-09-08)](http://prosecco.gforge.inria.fr/personal/hritcu/talks/zoe-defense.pdf)
   - Maxime's [presentation at the Coq Workshop (2014-07-18)](http://prosecco.gforge.inria.fr/personal/hritcu/talks/QuickChick-Coq.pdf)
   - Catalin's [presentation at the Coq Working Group @ PPS (2014-03-19)](http://prosecco.gforge.inria.fr/personal/hritcu/talks/QuickChick-PPS.pdf)
+
+---
+
+## Developer's corner
+
+### Build dependencies
+
+Dependencies are listed in [`coq-quickchick.opam`](./coq-quickchick.opam).
+
+    # To get the dependencies, add the Coq opam repository if you haven't already
+    opam repo add coq-released https://coq.inria.fr/opam/released
+    opam update
+    opam install . --deps-only
+
+### Build
+
+    dune build
+
+## Run tests
+
+    dune runtest
+
+### Run extra tests for quickChick tool
+
+    dune install coq-quickchick  # Makes QuickChick available globally
+    dune build @cram
+

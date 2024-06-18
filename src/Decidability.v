@@ -1,6 +1,3 @@
-Set Warnings "-extraction-opaque-accessed,-extraction".
-Set Warnings "-notation-overridden,-parsing".
-
 From ExtLib Require Import
      RelDec.
 From Coq Require Import
@@ -8,12 +5,10 @@ From Coq Require Import
      List
      NArith
      String
-     ZArith.
-From mathcomp Require Import
-     ssrbool
+     ZArith
      ssreflect
-     ssrnat.
-From QuickChick Require Import Checker.
+     ssrbool.
+From QuickChick Require Import Checker Generators Producer.
 
 Set Bullet Behavior "Strict Subproofs".
 
@@ -28,7 +23,6 @@ Class DecOpt (P : Prop) := { decOpt : nat -> option bool }.
 Axiom checkable_size_limit : nat.
 Extract Constant checkable_size_limit => "10000".
 
-Require Import Generators Producer.
 (* Discard tests that run further than the limit *)
 (* For proofs, the size parameter will need to be taken into account
    to prove limit results. We just add it to the large, practical constant.
@@ -62,9 +56,6 @@ Definition checker_backtrack (l : list (unit -> option bool)) : option bool :=
       | nil => if b then None else Some false
       end
   in aux l false.
-
-(* BCP: If I understand correctly, removing "Global" everywhere would
-   change nothing... Or? *)
 
 (* Additional Checkable instance *)
 #[global] Instance testDec {P} `{H : Dec P} : Checkable P.

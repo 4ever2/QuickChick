@@ -4,7 +4,6 @@
    tries to follow this code organization/abstraction. We need to
    expose quite a bit on the proof side for this to work though. *)
 
-Set Warnings "-extraction-opaque-accessed,-extraction".
 Set Warnings "-notation-overridden,-parsing".
 
 Require Import ZArith List Lia.
@@ -31,14 +30,14 @@ Import ListNotations.
 (* Rename? *)
 Class Producer (G : Type -> Type) :=
   {
-  super :> Monad G;
+  super : Monad G;
 
   sample : forall {A}, G A -> list A;
   
   sized  : forall {A: Type}, (nat -> G A) -> G A;
   resize : forall {A: Type}, nat -> G A -> G A;
 
-  choose : forall {A : Type} `{ChoosableFromInterval A}, (A * A) -> G A;
+  choose : forall {A : Type} {le} `{ChoosableFromInterval A le}, (A * A) -> G A;
   
   semProdSize :
     forall {A : Type}, G A -> nat -> set A;
@@ -57,6 +56,9 @@ Class Producer (G : Type -> Type) :=
       (forall (a : A), (a \in semProd g) -> G B) -> G B;
   
   }.
+#[global] Existing Instance super.
+
+Arguments bindPf {G Producer A B} g.
 
 Lemma semProdOpt_equiv {A} {G} `{PG: Producer G}
       (g : G (option A)) :
@@ -128,14 +130,19 @@ Class SizedAntimonotonicNone {A} {G} `{Producer G}
 (** FP + SizeMon *)
 Class SizeMonotonicOptFP {A} {G} {H : Producer G}
       (g : G (option A)) :=
-  { IsMon :> @SizeMonotonicOpt _ _ H g;
-    IsFP  :> @SizeFP _ _ H g }.
+  { IsMon : @SizeMonotonicOpt _ _ H g;
+    IsFP  : @SizeFP _ _ H g }.
+#[global] Existing Instance IsMon.
+#[global] Existing Instance IsFP.
 
 Class SizedMonotonicOptFP {A} {G} {H : Producer G}
       (g : nat -> G (option A)) :=
-  { IsMonSized :> @SizedMonotonicOpt _ _ H g;
-    IsFPSized  :> @SizedFP _ _ H g;
-    IsAntimon  :> @SizedAntimonotonicNone _ _ _ g }.
+  { IsMonSized : @SizedMonotonicOpt _ _ H g;
+    IsFPSized  : @SizedFP _ _ H g;
+    IsAntimon  : @SizedAntimonotonicNone _ _ _ g }.
+#[global] Existing Instance IsMonSized.
+#[global] Existing Instance IsFPSized.
+#[global] Existing Instance IsAntimon.
 
 #[global] Instance SizeMonotonicOptFP_FP {A} {G}
        (g : G (option A))
@@ -196,15 +203,15 @@ Class ProducerSemantics G `{Producer G} :=
                   \bigcup_(a in semProdSize g size) semProdSize (f a) size;
 
   semChoose :
-    forall A `{RandomQC.ChoosableFromInterval A} (a1 a2 : A),
-      RandomQC.leq a1 a2 ->
-      (semProd (choose (a1,a2)) <--> [set a | RandomQC.leq a1 a && RandomQC.leq a a2]);
+    forall A {le} `{RandomQC.ChoosableFromInterval A le} (a1 a2 : A),
+      le a1 a2 ->
+      (semProd (choose (a1,a2)) <--> [set a | le a1 a /\ le a a2]);
 
   semChooseSize :
-    forall A `{RandomQC.ChoosableFromInterval A} (a1 a2 : A),
-      RandomQC.leq a1 a2 ->
+    forall A le `{RandomQC.ChoosableFromInterval A le} (a1 a2 : A),
+      le a1 a2 ->
       forall size, (semProdSize (choose (a1,a2)) size <-->
-              [set a | RandomQC.leq a1 a && RandomQC.leq a a2]);
+              [set a | le a1 a /\ le a a2]);
 
   (* semChooseSizeEmpty : *)
   (*   forall A `{RandomQC.ChoosableFromInterval A} (a1 a2 : A), *)
@@ -703,23 +710,23 @@ Section ProducerHigh.
   Definition liftProd4 {A1 A2 A3 A4 R}
              (F : A1 -> A2 -> A3 -> A4 -> R)
              (m1 : G A1) (m2 : G A2) (m3 : G A3) (m4: G A4)
-    : G R := nosimpl(
-                 x1 <- m1;;
-                 x2 <- m2;;
-                 x3 <- m3;;
-                 x4 <- m4;;
-                 ret (F x1 x2 x3 x4)).
+    : G R :=
+    x1 <- m1;;
+    x2 <- m2;;
+    x3 <- m3;;
+    x4 <- m4;;
+    ret (F x1 x2 x3 x4).
 
   Definition liftProd5 {A1 A2 A3 A4 A5 R}
            (F : A1 -> A2 -> A3 -> A4 -> A5 -> R)
            (m1 : G A1) (m2 : G A2) (m3 : G A3) (m4: G A4) (m5 : G A5)
-    : G R := nosimpl(
-                 x1 <- m1;;
-                 x2 <- m2;;
-                 x3 <- m3;;
-                 x4 <- m4;;
-                 x5 <- m5;;
-                 ret (F x1 x2 x3 x4 x5)).
+    : G R :=
+    x1 <- m1;;
+    x2 <- m2;;
+    x3 <- m3;;
+    x4 <- m4;;
+    x5 <- m5;;
+    ret (F x1 x2 x3 x4 x5).
 
   Definition sequenceProd {A : Type} (ms : list (G A)) : G (list A) :=
     foldr (fun m m' => x <- m;;
@@ -727,11 +734,11 @@ Section ProducerHigh.
                        ret (x :: xs)) (ret nil) ms. 
 
   Fixpoint foldProd {A B : Type} (f : A -> B -> G A) (l : list B) (a : A)
-    : G A := nosimpl(
-                 match l with
-                 | nil => ret a
-                 | (x :: xs) => bind (f a x) (foldProd f xs)
-                 end).
+    : G A :=
+    match l with
+    | nil => ret a
+    | (x :: xs) => bind (f a x) (foldProd f xs)
+    end.
 
   Definition bindOpt {A B}
              (g : G (option A)) (f : A -> G (option B)) : G (option B) :=
@@ -1058,13 +1065,36 @@ Next Obligation.
   move => l [H1 H2]; split => // a Ha. by eapply (monotonic H0); eauto.
 Qed.
 
+Lemma lele_coq_ssr i j k : (i <= j /\ j <= k)%coq_nat <-> (i <= j) && (j <= k).
+Proof.
+  split.
+  - move => [/leP Hij /leP Hjk]. by apply /andP.
+  - move /andP => [/leP Hij /leP Hjk]. done.
+Qed.
+
+Lemma semChooseNat (a1 a2 : nat) : a1 <= a2 ->
+      (semProd (choose (a1,a2)) <--> [set a | a1 <= a <= a2]).
+Proof.
+  move => /leP H.
+  rewrite (semChoose (A := nat) (H0 := ChooseNat) H).
+  intros a. apply lele_coq_ssr.
+Qed.
+
+Lemma semChooseSizeNat (a1 a2 : nat) : a1 <= a2 ->
+      forall size, (semProdSize (choose (a1,a2)) size <--> [set a | a1 <= a <= a2]).
+Proof.
+  move => /leP H size.
+  rewrite (semChooseSize (H0 := ChooseNat) H).
+  intros a. apply lele_coq_ssr.
+Qed.
 
 Lemma semListOfSize {A : Type} (g : G A) size :
   semProdSize (listOf g) size <-->
   [set l | length l <= size /\ l \subset (semProdSize g size)].
 Proof.
 rewrite /listOf semSizedSize semBindSize; setoid_rewrite semVectorOfSize.
-rewrite semChooseSize // => l; split=> [[n [/andP [_ ?] [-> ?]]]| [? ?]] //.
+assert (Hsiz : Nat.le 0 size) by lia.
+rewrite semChooseSizeNat // => l; split=> [[n [/andP [? ?] [-> ?]]]| [? ?]] //.
 by exists (length l).
 Qed.
 
@@ -1118,12 +1148,12 @@ Lemma semOneofSize {A} (l : list (G A)) (def : G A) s : semProdSize (oneOf_ def 
   <--> if l is nil then semProdSize def s else \bigcup_(x in l) semProdSize x s.
 Proof.
 case: l => [|g l].
-  rewrite semBindSize semChooseSize //.
-  rewrite (eq_bigcupl [set 0]) ?bigcup_set1 // => a; split=> [/andP [? ?]|<-] //.
-  by apply/antisym/andP.
-rewrite semBindSize semChooseSize //.
-set X := (fun a : nat => is_true (_ && _)).
-by rewrite (reindex_bigcup (nth def (g :: l)) X) // /X subn1 nth_imset.
+- rewrite semBindSize semChooseSizeNat //.
+  rewrite (eq_bigcupl [set 0]) ?bigcup_set1 // => a; split=> [/andP [? w]|<-] //.
+  change (length [] - 1) with 0 in w. rewrite leqn0 in w. by move: w => /eqP.
+- rewrite semBindSize semChooseSizeNat //.
+  set X := (fun a : nat => is_true (_ && _)).
+  by rewrite (reindex_bigcup (nth def (g :: l)) X) // /X subn1 nth_imset.
 Qed.
 
 Lemma semOneof {A} (l : list (G A)) (def : G A) :
@@ -1152,7 +1182,7 @@ Lemma semElementsSize {A} (l: list A) (def : A) s :
 Proof.
 rewrite semBindSize.
 setoid_rewrite semReturnSize.
-rewrite semChooseSize //=.
+rewrite semChooseSizeNat //=.
 setoid_rewrite nthE. (* SLOW *)
 case: l => [|x l] /=.
   rewrite (eq_bigcupl [set 0]) ?bigcup_set1 // => n.

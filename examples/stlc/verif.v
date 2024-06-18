@@ -1,3 +1,4 @@
+Set Warnings "-notation-overridden".
 From mathcomp Require Import ssreflect ssrbool ssrnat eqtype.
 Require Import String. (* I don't know why we need this.. Probably I am forgetting something *)
 From QuickChick Require Import QuickChick.
@@ -150,7 +151,7 @@ Lemma max_const_Const_leq :
 Proof.
   intros. induction t; try (constructor; simpl; lia);
   constructor; simpl; eapply Const_leq_trans; try eassumption;
-  (try now apply Max.le_max_l); (try now apply Max.le_max_r); lia.
+  (try now apply PeanoNat.Nat.le_max_l); (try now apply PeanoNat.Nat.le_max_r); lia.
 Qed.
 
 (*

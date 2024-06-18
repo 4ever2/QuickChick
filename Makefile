@@ -75,15 +75,20 @@ tests:
 #	$(MAKE) -C examples/c-mutation test
 #	coqc examples/BSTTest.v
 	coqc examples/DependentTest.v
+	coqc examples/TacticExample.v
 
 COMPATFILES:= \
 	plugin/depDriver.ml \
 	plugin/genericLib.ml \
+	plugin/mergeTypes.ml \
+	plugin/quickChick.mlg \
 	plugin/unifyQC.ml \
 	plugin/tactic_quickchick.mlg \
 	plugin/weightmap.mlg \
+	src/Compat.v \
 	src/ExtractionQC.v \
 	src/QuickChick.v \
+	src/TacticsUtil.v \
 	_CoqProject
 
 compat: $(COMPATFILES)

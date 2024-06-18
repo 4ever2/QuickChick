@@ -5,7 +5,6 @@ MAKE SURE TO EDIT THE .cppo SOURCE OF THIS FILE RATHER THAN THE GENERATED RESULT
 
 *)
 
-Set Warnings "-extraction-opaque-accessed,-extraction".
 Set Warnings "-notation-overridden,-parsing".
 
 Require Import ZArith.
@@ -108,8 +107,6 @@ Extract Constant trace =>
     | c :: l -> Bytes.set s i c; copy (i+1) l
    in Bytes.to_string (copy 0 l)); flush stdout; fun y -> y)".
 
-Set Extraction AccessOpaque.
-
 Require Import mathcomp.ssreflect.ssreflect.
 From mathcomp Require Import ssreflect ssrnat ssrbool div eqtype.
 Extract Constant divn => "(fun m -> function 0 -> 0 | d -> m / d)".
@@ -124,6 +121,10 @@ Extract Constant Nat.eqb => "(=)".
 Extract Constant Coq.Init.Nat.eqb => "(=)".
 Extract Constant Nat.div => "(fun x -> function 0 -> 0 | y -> x / y)".
 Extract Constant Coq.Init.Nat.div => "(fun x -> function 0 -> 0 | y -> x / y)".
+Extract Constant Nat.min => "min".
+Extract Constant Nat.max => "max".
+Extract Constant Nat.modulo => "(fun x -> function 0 -> x | y -> x mod y)".
+Extract Constant Nat.leb => "(<=)".
 
 Axiom print_extracted_coq_string : string -> unit.
 Extract Constant print_extracted_coq_string =>
@@ -131,7 +132,7 @@ Extract Constant print_extracted_coq_string =>
    let s = Bytes.create (List.length l) in
    let rec copy i = function
     | [] -> s
-    | c :: l -> s.[i] <- c; copy (i+1) l
+    | c :: l -> Bytes.set s i c; copy (i+1) l
    in Bytes.to_string (copy 0 l))".
 
 Axiom withTime : forall {A}, (unit -> A) -> AugmentedTime A.

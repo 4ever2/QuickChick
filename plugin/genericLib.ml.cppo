@@ -33,7 +33,9 @@ let make_up_name () : Id.t =
   cnt := !cnt + 1;
   id
        
-#if COQ_VERSION >= (8, 18, 0)
+#if COQ_VERSION >= (8, 19, 0)
+let hole = CAst.make @@ CHole None
+#elif COQ_VERSION >= (8, 18, 0)
 let hole = CAst.make @@ CHole (None, Namegen.IntroAnonymous)
 #else
 let hole = CAst.make @@ CHole (None, Namegen.IntroAnonymous, None)
@@ -47,6 +49,8 @@ let id_of_name n =
 (* Everything marked "Opaque" should have its implementation be hidden in the .mli *)
 
 type coq_expr = constr_expr (* Opaque *)
+
+let interp_open_coq_expr env evd e = fst (Constrintern.interp_constr env evd e)
 
 let debug_coq_expr (c : coq_expr) : unit =
   let env = Global.env () in
@@ -76,11 +80,11 @@ let gInject s =
   CAst.make @@ CRef (qualid_of_string s, None)
 
 #if COQ_VERSION >= (8, 19, 0)
-let gType0 = CAst.make @@ CSort (Glob_term.UAnonymous {rigid = UnivRigid})
+let gType0 = CAst.make @@ CSort (Glob_term.UAnonymous {rigid = UState.UnivRigid})
 #else
 let gType0 = CAst.make @@ CSort (Glob_term.UAnonymous {rigid = true})
 #endif
-
+         
 type ty_param = Id.t (* Opaque *)
 let ty_param_to_string (x : ty_param) = Id.to_string x
 let inject_ty_param (s : string) : ty_param = Id.of_string s
@@ -104,13 +108,20 @@ let gArg ?assumName:(an=hole) ?assumType:(at=hole) ?assumImplicit:(ai=false) ?as
     | _a -> failwith "This expression should be a name" in
   let max_implicit = Glob_term.MaxImplicit in
   CLocalAssum ( [CAst.make ?loc:(fst n) @@ snd n],
+#if COQ_VERSION >= (8, 20, 0)
+                  None,
+#endif
                   (if ag then Generalized (max_implicit, false)
                    else if ai then Default max_implicit else Default Glob_term.Explicit),
                   at )
 
 let arg_to_var (x : arg) =
   match x with
+#if COQ_VERSION >= (8, 20, 0)
+  | CLocalAssum ([{CAst.v = id; _}], _, _ ,_ ) -> id_of_name id
+#else
   | CLocalAssum ([{CAst.v = id; _}], _ ,_ ) -> id_of_name id
+#endif
   | _ -> qcfail "arg_to_var must be named"
   
 let str_lst_to_string sep (ss : string list) = 
@@ -425,7 +436,7 @@ let rec dep_arrowify terminal names types =
    nparams : number of <Type> parameters in the beginning
    arg_names : argument names (type parameters, pattern specific variables 
  *)
-let parse_dependent_type i nparams ty oib arg_names = 
+let parse_dependent_type_internal i nparams ty oibopt arg_names =
   let rec aux i ty =
     let env = Global.env () in
     let sigma = Evd.from_env env in
@@ -435,7 +446,7 @@ let parse_dependent_type i nparams ty oib arg_names =
   (*        msgerr (int (i + nparams) ++ str " Rel " ++ int (destRel ty) ++ fnl ()); *)
       let db = destRel ty in
       if i + nparams = db then (* Current inductive, no params *)
-        Some (DTyCtr (qualid_of_ident oib.mind_typename, []))
+        Some (DTyCtr (qualid_of_ident (let Some oib = oibopt in oib.mind_typename), []))
       else begin (* [i + nparams - db]th parameter *) 
         msg_debug (str (Printf.sprintf "Non-self-rel: %s" (dep_type_to_string (List.nth arg_names (i + nparams - db - 1)))) ++ fnl ());
         try Some (List.nth arg_names (i + nparams - db - 1))
@@ -510,6 +521,23 @@ let parse_dependent_type i nparams ty oib arg_names =
     ) in
   aux i ty
 
+let parse_dependent_type ty =
+
+    let (ctr_pats, result) = if isConst ty then ([],ty) else Term.decompose_prod ty in
+
+    let pat_names, pat_types = List.split (List.rev ctr_pats) in
+
+    let pat_names = List.map (fun n -> n.binder_name) pat_names in
+    let arg_names = 
+      List.map (fun n -> match n with
+                         | Name x -> DTyVar x 
+                         | Anonymous -> DTyVar (make_up_name ()) (* Make up a name, but probably can't be used *)
+               ) pat_names in 
+
+    parse_dependent_type_internal (1 + (List.length ctr_pats)) 0 result None arg_names >>= fun result_ty ->
+    sequenceM (fun x -> x) (List.mapi (fun i ty -> parse_dependent_type_internal i 0 ty None arg_names) (List.map (Vars.lift (-1)) pat_types)) >>= fun types ->
+    Some (dep_arrowify result_ty pat_names types)
+  
 let dep_parse_type nparams param_names arity_ctxt oib =
   let len = List.length arity_ctxt in
   (* Only type parameters can be used - no dependencies on the types *)
@@ -523,8 +551,8 @@ let dep_parse_type nparams param_names arity_ctxt oib =
            match n with
            | Name id -> (* Check if it is a parameter to add its type / name *)
               if is_Type t then Some acc 
-              else parse_dependent_type i nparams t oib arg_names >>= fun dt -> Some ((n,dt) :: acc)
-           | _ ->  parse_dependent_type i nparams t oib arg_names >>= fun dt -> Some ((n,dt) :: acc)
+              else parse_dependent_type_internal i nparams t (Some oib) arg_names >>= fun dt -> Some ((n,dt) :: acc)
+           | _ ->  parse_dependent_type_internal i nparams t (Some oib) arg_names >>= fun dt -> Some ((n,dt) :: acc)
         ) (Some []) (List.mapi (fun i x -> (len - nparams - i, x)) arity_ctxt) >>= fun nts ->
   let (names, types) = List.split nts in
   Some (dep_arrowify (DTyCtr (injectCtr "Prop", [])) names types)
@@ -555,10 +583,10 @@ let dep_parse_constructors nparams param_names oib : dep_ctr list option =
                ) pat_names in 
 
 (*     msgerr (str "Calculating result type" ++ fnl ()); *)
-    parse_dependent_type (1 + (List.length ctr_pats)) nparams result oib arg_names >>= fun result_ty ->
+    parse_dependent_type_internal (1 + (List.length ctr_pats)) nparams result (Some oib) arg_names >>= fun result_ty ->
 
 (*     msgerr (str "Calculating types" ++ fnl ()); *)
-    sequenceM (fun x -> x) (List.mapi (fun i ty -> parse_dependent_type i nparams ty oib arg_names) (List.map (Vars.lift (-1)) pat_types)) >>= fun types ->
+    sequenceM (fun x -> x) (List.mapi (fun i ty -> parse_dependent_type_internal i nparams ty (Some oib) arg_names) (List.map (Vars.lift (-1)) pat_types)) >>= fun types ->
     Some (ctr_id, dep_arrowify result_ty pat_names types)
   in
 
@@ -601,7 +629,11 @@ let gApp ?explicit:(expl=false) c cs =
   else mkAppC (c, cs)
 
 let gProdWithArgs args f_body =
+#if COQ_VERSION >= (8, 20, 0)
+  let xvs = List.map (fun (CLocalAssum ([{CAst.v = n;_}], _, _, _)) ->
+#else
   let xvs = List.map (fun (CLocalAssum ([{CAst.v = n;_}], _, _)) ->
+#endif
                       match n with
                       | Name x -> x
                       | _ -> make_up_name ()
@@ -610,7 +642,11 @@ let gProdWithArgs args f_body =
   mkCProdN args fun_body
 
 let gFunWithArgs args f_body =
+#if COQ_VERSION >= (8, 20, 0)
+  let xvs = List.map (fun (CLocalAssum ([{CAst.v = n;_}], _, _, _)) ->
+#else
   let xvs = List.map (fun (CLocalAssum ([{CAst.v = n;_}], _, _)) ->
+#endif
                       match n with
                       | Name x -> x
                       | _ -> make_up_name ()
@@ -618,13 +654,19 @@ let gFunWithArgs args f_body =
   let fun_body = f_body xvs in
   mkCLambdaN args fun_body
 
+let gIf b t f = CAst.make @@ CIf (b, (None, None) , t, f)
+
 let gFun xss (f_body : var list -> coq_expr) =
   match xss with
   | [] -> f_body []
   | _ ->
   let xvs = List.map (fun x -> fresh_name x) xss in
   (* TODO: optional argument types for xss *)
+#if COQ_VERSION >= (8, 20, 0)
+  let binder_list = List.map (fun x -> CLocalAssum ([CAst.make @@ Name x], None, Default Glob_term.Explicit, hole)) xvs in
+#else
   let binder_list = List.map (fun x -> CLocalAssum ([CAst.make @@ Name x], Default Glob_term.Explicit, hole)) xvs in
+#endif
   let fun_body = f_body xvs in
   mkCLambdaN binder_list fun_body 
 
@@ -634,14 +676,22 @@ let gFunTyped xts (f_body : var list -> coq_expr) =
   | _ ->
   let xvs = List.map (fun (x,t) -> (fresh_name x,t)) xts in
   (* TODO: optional argument types for xss *)
+#if COQ_VERSION >= (8, 20, 0)
+  let binder_list = List.map (fun (x,t) -> CLocalAssum ([CAst.make @@ Name x], None, Default Glob_term.Explicit, t)) xvs in
+#else
   let binder_list = List.map (fun (x,t) -> CLocalAssum ([CAst.make @@ Name x], Default Glob_term.Explicit, t)) xvs in
+#endif
   let fun_body = f_body (List.map fst xvs) in
   mkCLambdaN binder_list fun_body 
 
 (* with Explicit/Implicit annotations *)  
 let gRecFunInWithArgs ?structRec:(rec_id=None) ?assumType:(typ=hole) (fs : string) args (f_body : (var * var list) -> coq_expr) (let_body : var -> coq_expr) = 
   let fv  = fresh_name fs in
+#if COQ_VERSION >= (8, 20, 0)
+  let xvs = List.map (fun (CLocalAssum ([{CAst.v = n;_}], _, _, _)) ->
+#else
   let xvs = List.map (fun (CLocalAssum ([{CAst.v = n;_}], _, _)) ->
+#endif
                       match n with
                       | Name x -> x
                       | _ -> make_up_name ()
@@ -651,7 +701,11 @@ let gRecFunInWithArgs ?structRec:(rec_id=None) ?assumType:(typ=hole) (fs : strin
     | None -> None
     | Some id -> Some (CAst.make @@ CStructRec (CAst.make id)) in
   CAst.make @@ CLetIn (CAst.make @@ Name fv,
+#if COQ_VERSION >= (8, 20, 0)
+    CAst.make @@ CFix(CAst.make fv,[(CAst.make fv, None, rec_wf, args, typ, fix_body)]), None,
+#else
     CAst.make @@ CFix(CAst.make fv,[(CAst.make fv, rec_wf, args, typ, fix_body)]), None,
+#endif
     let_body fv)
              
 let gRecFunIn ?structRec:(rec_id=None) ?assumType:(typ = hole) (fs : string) (xss : string list) (f_body : (var * var list) -> coq_expr) (let_body : var -> coq_expr) =
@@ -736,6 +790,27 @@ let gType ty_params dep_type =
     | DNot dt -> gApp (gInject "Coq.Init.Datatypes.negb") [aux dt]
   in 
   aux dep_type
+  
+let gType' ty_params dep_type = 
+  msg_debug (str "Calling gType' with: " ++ str (dep_type_to_string dep_type) ++ fnl ());
+  let rec aux dt : coq_expr = 
+    match dt with
+    | DArrow (dt1, dt2) -> let t1 = aux dt1 in
+                           let t2 = aux dt2 in 
+                           gFunWithArgs [gArg ~assumType:t1 ()] (fun _ -> t2)
+    | DProd ((x,dt1), dt2) -> let t1 = aux dt1 in
+                              let t2 = aux dt2 in 
+                              gProdWithArgs [gArg ~assumName:(gVar x) ~assumType:t1 ()] (fun _ -> t2)
+    | DTyParam tp -> gTyParam tp
+    | DTyCtr (c,dts) -> gApp ~explicit:true (gTyCtr c) (List.map aux dts)
+    | DCtr (c, dts) -> gApp (gCtr c) (List.map aux dts)
+    | DTyVar x -> gVar x 
+    | DApp (c, dts) -> gApp (aux c) (List.map aux dts) 
+    | DHole -> hole
+    | DNot dt -> gApp (gInject "Coq.Init.Logic.not") [aux dt]
+  in 
+  debug_coq_expr (aux dep_type); aux dep_type
+  
 (*    
   match ty_params with 
   | [] -> aux dep_type 
@@ -962,7 +1037,11 @@ let rec gList = function
   | x::xs -> gCons x (gList xs)
 
 (* Generic String Manipulations *)
+#if COQ_VERSION >= (8, 19, 0)
+let string_scope ast = CAst.make @@ CDelimiters (DelimUnboundedScope, "string", ast)
+#else
 let string_scope ast = CAst.make @@ CDelimiters ("string", ast)
+#endif
 let gStr s = string_scope (CAst.make @@ CPrim (String s))
 let emptyString = gInject "Coq.Strings.String.EmptyString"
 let str_append c1 c2 = gApp (gInject "Coq.Strings.String.append") [c1; c2]
@@ -1015,7 +1094,11 @@ let dtTupleType =
 
 (* Int *)
 
+#if COQ_VERSION >= (8, 19, 0)
+let nat_scope ast = CAst.make @@ CDelimiters (DelimUnboundedScope, "nat", ast)
+#else
 let nat_scope ast = CAst.make @@ CDelimiters ("nat", ast)
+#endif
 let gInt n =
   let number =
     Number (NumTok.Signed.of_int_string (string_of_int n))
@@ -1033,9 +1116,12 @@ let glt x y = gle (gApp (gInject "Coq.Init.Datatypes.S") [x]) y
 let gEq x y = gApp (gInject "Coq.Init.Logic.eq") [x; y]
             
 (* option type in Coq *)
-let gNone typ = gApp ~explicit:true (gInject "Coq.Init.Datatypes.None") [typ]
-let gSome typ c = gApp ~explicit:true (gInject "Coq.Init.Datatypes.Some") [typ; c]
-              
+let gNone typ = gApp ?explicit:(Some true) (gInject "Coq.Init.Datatypes.None") [typ]
+let gSome typ c = gApp ?explicit:(Some true) (gInject "Coq.Init.Datatypes.Some") [typ; c]
+        
+let gNone' = gInject "Coq.Init.Datatypes.None"
+let gSome' c = gApp (gInject "Coq.Init.Datatypes.Some") [c]
+
 let gOption c = gApp (gInject "Coq.Init.Datatypes.option") [c]
 
 (* Boolean *)
@@ -1051,9 +1137,34 @@ let decToBool c =
            ; (injectCtr "Coq.Init.Specif.right", ["neq"], fun _ -> g_false)
     ]
 
+let decOptToBool c = 
+  gMatch c [ (injectCtr "Coq.Init.Datatypes.Some", ["res"], fun [res] -> gVar res)
+           ; (injectCtr "Coq.Init.Datatypes.None",       [], fun [] -> g_false)
+  ]
+
 (* Unit *)
 let gUnit = gInject "Coq.Init.Datatypes.unit"
 let gTT   = gInject "Coq.Init.Datatypes.tt"
+
+(* dec *)
+
+let g_dec typ = gApp ?explicit:(Some true) (gInject "QuickChick.Decidability.dec") [typ]
+let g_decOpt typ n = gApp ?explicit:(Some true) (gInject "QuickChick.Decidability.decOpt") [typ; hole; n]
+let g_dec_decOpt = gInject "QuickChick.Decidability.dec_decOpt"
+
+(* checker *)
+
+let g_checker toCheck = gApp (gInject "QuickChick.Checker.checker") [toCheck]
+
+(* Gen combinators *)
+
+let g_forAll gen prop = gApp (gInject "QuickChick.Checker.forAll") [gen; prop]
+
+let g_arbitrary = gInject "QuickChick.Classes.arbitrary"
+
+let g_quickCheck p = gApp (gInject "QuickChick.Test.quickCheck") [p]
+
+let g_show typ = gApp (gInject "QuickChick.Show.show") [typ]
 
 (* Recursion combinators / fold *)
 (* fold_ty : ( a -> coq_type -> a ) -> ( ty_ctr * coq_type list -> a ) -> ( ty_param -> a ) -> coq_type -> a *)
@@ -1103,11 +1214,19 @@ let defineTypedConstant s c typ =
 (* Declare an instance *)
 let create_names_for_anon a =
   match a with 
+#if COQ_VERSION >= (8, 20, 0)
+  | CLocalAssum ([{CAst.v = n; loc}], r, x, y) ->
+#else
   | CLocalAssum ([{CAst.v = n; loc}], x, y) ->
+#endif
      begin match n with
            | Name x -> (x, a)
            | Anonymous -> let n = make_up_name () in
+#if COQ_VERSION >= (8, 20, 0)
+                          (n, CLocalAssum ([CAst.make ?loc:loc @@ Names.Name n], r, x, y))
+#else
                           (n, CLocalAssum ([CAst.make ?loc:loc @@ Names.Name n], x, y))
+#endif
      end
   | _ -> failwith "Non RawAssum in create_names"
     

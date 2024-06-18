@@ -1,11 +1,9 @@
-Set Warnings "-extraction-opaque-accessed,-extraction".
 Set Warnings "-notation-overridden,-parsing".
 
-Require Import List ZArith Tactics.
+From mathcomp Require Import ssreflect ssrnat eqtype seq.
+From Coq Require Import List ZArith ssreflect ssrfun ssrbool Lia.
+From QuickChick Require Import Tactics.
 Import ListNotations.
-
-Require Import mathcomp.ssreflect.ssreflect.
-From mathcomp Require Import ssreflect ssrfun ssrbool ssrnat eqtype seq.
 
 (* TODO rename this file to util.v -- not only for nats *)
 
@@ -35,23 +33,10 @@ Qed.
 Set Implicit Arguments.
 Unset Strict Implicit.
 
-
 Lemma lt0_False :
   forall n, ~ n < 0.
 Proof.
   firstorder.
-Qed.
-
-Lemma leq_ltS n m :
-  n <= m -> n < m.+1.
-Proof.
-  eauto.
-Qed.
-
-Lemma ltS_leq n m :
-  n <= m -> n < m.+1.
-Proof.
-  eauto.
 Qed.
 
 Lemma plus_leq_compat_l n m k :
@@ -68,11 +53,6 @@ Proof.
   intros. ssromega.
 Qed.
 
-Lemma leq_refl: forall n, n <= n.
-Proof.
-  intros. ssromega.
-Qed.
-
 Lemma succ_neq_zero :
   forall x, S x <> 0.
 Proof.
@@ -83,12 +63,6 @@ Lemma isSomeSome {A : Type} (y : A) :
   Some y.
 Proof.
   exact isT.
-Qed.
-
-Lemma eq_symm {A : Type} (x y : A) :
-  x = y -> y = x.
-Proof.
-  firstorder.
 Qed.
 
 Lemma ltn0Sn_pair {A : Type} (n : nat) (g : A)  :
