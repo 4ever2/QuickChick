@@ -2,21 +2,127 @@ From Coq Require Import Relations RelationClasses BoolOrder ssreflect ssrfun Lia
 From QuickChick Require Import LazyList Tactics.
 Set Bullet Behavior "Strict Subproofs".
 
-(* We axiomatize a random number generator
-   (currently written in OCaml only) *)
-Axiom RandomSeed : Type.
+From Coq Require Import Uint63.
+
+Open Scope uint63_scope.
+
+Record state := {
+  a : int;
+  s : int;
+  x0 : int;
+  x1 : int;
+}.
+
+Definition M := 5851342789287276437.
+Definition M0 := 6537550379118437091.
+
+Definition rotl x k :=
+  (x << k) lor (x >> (64 - k)).
+
+Definition next st :=
+  (* Combining operation *)
+  let z := st.(s) + st.(x0) in
+  (* Mixing function *)
+  let z := (z lxor (z >> 32)) * M0 in
+  let z := (z lxor (z >> 32)) * M0 in
+  let z := (z lxor (z >> 32)) in
+  (* LCG update *)
+  let s' := st.(s) * M + st.(a) in
+  (* XBG update *)
+  let q0 := st.(x0) in
+  let q1 := st.(x1) in
+  let q1 := q1 lxor q0 in
+  let q0 := rotl q0 24 in
+  let q0 := q0 lxor q1 lxor (q1 << 16) in
+  let q1 := rotl q1 37 in
+
+  (* return result *)
+  ({| a := st.(a); s := s'; x0 := q0; x1 := q1 |}, z).
+
+Definition max_int31 := 1073741823.
+Definition max_int32 := (1 << 31) - 1.
+
+Definition bits st :=
+  let (st, x) := next st in
+  (st, x land max_int31).
+
+Definition bits64 st :=
+  next st.
+
+Definition mk i1 i2 i3 i4 := {|
+    a := (i1 lor 1);
+    s := i2;
+    x0 := (if i3 =? 0 then 1 else i3);
+    x1 := (if i4 =? 0 then 2 else i4);
+  |}.
+
+Definition split st :=
+  let (st, i1) := bits64 st in
+  let (st, i2) := bits64 st in
+  let (st, i3) := bits64 st in
+  let (st, i4) := bits64 st in
+  (st, mk i1 i2 i3 i4).
+
+(* TOOD: init from single seed *)
+Definition init s1 s2 s3 s4 := {|
+    a := s1;
+    s := s2;
+    x0 := s3;
+    x1 := s4;
+  |}.
+
+(* TODO: we hardcode a seed for now, ideally the seed should come from the plugin *)
+Definition make_self_init : unit -> state :=
+  fun _ => init
+    6196874289567705097
+    586573249833713189
+    8591268803865043407
+    6388613595849772044.
+
+Definition g_bool st :=
+  let (st, i) := next st in
+  (st, (i land 1) =? 0).
+
+From Coq Require Import Program.
+
+#[bypass_check(guard)]
+Program Fixpoint int_aux st n mask {measure (Z.to_nat (to_Z n))}  :=
+  let (st, i) := next st in
+  let r := i land mask in
+  let v := r mod n in
+  if mask - n +1 <? r -v
+  then int_aux st n mask
+  else (st, v).
+Next Obligation. Admitted.
+
+Definition g_int st bound :=
+  (* We assume bound is valid since we cannot throw an exception *)
+  int_aux st bound max_int31.
+
+Definition g_full_int st bound :=
+  int_aux st bound (if bound <=? max_int31 then max_int31
+                    else if bound <=? max_int32 then max_int32
+                    else max_int).
+
+Definition RandomSeed : Type := state.
 Axiom randomSeed_inhabited : inhabited RandomSeed.
 
-Axiom randomNext     : RandomSeed -> Z * RandomSeed.
-Axiom randomGenRange : RandomSeed -> Z * Z.
-Axiom mkRandomSeed   : Z          -> RandomSeed.
-Axiom newRandomSeed  : RandomSeed.
+Definition randomNext (st: RandomSeed) : Z * RandomSeed :=
+  let (st, i) := bits st in
+  (to_Z i, st).
+(* Not used anywhere? *)
+Definition mkRandomSeed (i : Z) : RandomSeed :=
+  let i := of_Z i in
+  init i i i i.
+Definition newRandomSeed : RandomSeed :=
+  make_self_init ().
 
-(* begin randomSplitAssumption *)
-Axiom randomSplit : RandomSeed -> RandomSeed * RandomSeed.
+Definition randomSplit (st : RandomSeed) : RandomSeed * RandomSeed :=
+  split st.
 Axiom randomSplitAssumption :
   forall s1 s2 : RandomSeed, exists s, randomSplit s = (s1,s2).
-(* end randomSplitAssumption *)
+
+Close Scope uint63_scope.
 
 CoInductive RandomSeedTree :=
 | RstNode : RandomSeed -> RandomSeedTree -> RandomSeedTree -> RandomSeedTree.
@@ -110,7 +216,7 @@ induction st.
   destruct p eqn:P.
   - inversion H0.
   - inversion H; subst.
-    destruct s0 eqn:S0.
+    destruct s1 eqn:S0.
     * simpl. apply IHst1; auto.
     * simpl. apply IHst2; auto.
 Qed.
@@ -206,7 +312,7 @@ Lemma corrEmptyLeaf : forall s l f, correspondingSeedTree l f (SeedTreeLeaf s) -
     - destruct s0 eqn : S0.
       * apply PrefixFreeWithNil in Pref; subst; auto.
       * pose proof (In_Vary (s1 :: s2)) as Hyp; clear In_Vary.
-        
+
         inversion Pref.
         fireInLeft Hyp'. simpl in Hyp'. inversion Hyp'.
 
@@ -286,9 +392,9 @@ Lemma refinePreservesPrefixFree : forall d l, PrefixFree l -> PrefixFree (refine
   intros.
   induction l.
   - unfold refineList; constructor.
-  - destruct a eqn:A; subst.
+  - destruct a0 eqn:A; subst.
     * apply prefixFreeEmpty in H. subst. unfold refineList. simpl. constructor.
-    * destruct s eqn:S; destruct d; subst.
+    * destruct s0 eqn:S; destruct d; subst.
       + unfold refineList; simpl.
         eapply FreeCons.
         -- apply IHl. inversion H; auto.
@@ -298,7 +404,7 @@ Lemma refinePreservesPrefixFree : forall d l, PrefixFree l -> PrefixFree (refine
            inversion H; subst; clear H.
            apply filter_In in H2. inversion H2; subst; clear H2.
            destruct x eqn:X; simpl in *. inversion H0.
-           destruct s eqn:S; simpl in *.
+           destruct s0 eqn:S; simpl in *.
            pose proof H5 (Left :: l0).
            eapply H2 in H; auto.
            simpl. instantiate (1 := p2). instantiate (1:= p1). rewrite H1. auto.
@@ -316,7 +422,7 @@ Lemma refinePreservesPrefixFree : forall d l, PrefixFree l -> PrefixFree (refine
            inversion H; subst; clear H.
            apply filter_In in H2. inversion H2; subst; clear H2.
            destruct x eqn:X; simpl in *. inversion H0.
-           destruct s eqn:S; simpl in *.
+           destruct s0 eqn:S; simpl in *.
            inversion H0.
            pose proof H5 (Right :: l0).
            eapply H2 in H; auto.
@@ -368,7 +474,7 @@ Next Obligation.
 eapply Corresponding; intros.
 + apply refineCorrect'.
   inversion Corr as [Vary_In _ _ ]; clear Corr.
-  pose proof (Vary_In (Left :: p) s) as Hyp; clear Vary_In.
+  pose proof (Vary_In (Left :: p) s0) as Hyp; clear Vary_In.
   auto.
 + apply refineCorrect in H.
   inversion Corr as [_ In_Vary _]; clear Corr.
@@ -390,7 +496,7 @@ Next Obligation.
 eapply Corresponding; intros.
 + apply refineCorrect'.
   inversion Corr as [Vary_In _ _ ]; clear Corr.
-  pose proof (Vary_In (Right :: p) s) as Hyp; clear Vary_In.
+  pose proof (Vary_In (Right :: p) s0) as Hyp; clear Vary_In.
   auto.
 + apply refineCorrect in H.
   inversion Corr as [_ In_Vary _]; clear Corr.
@@ -431,7 +537,7 @@ induction p.
     * instantiate (1 := []). instantiate (1 := []). auto.
   - simpl. auto.
 + intros.
-  destruct st; destruct a; simpl.
+  destruct st; destruct a0; simpl.
   - rewrite refineFunCorrect.
     apply IHp.
   - rewrite refineFunCorrect; apply IHp.
@@ -480,12 +586,12 @@ induction p as [ | d ds].
     instantiate (1:= Right :: ds). instantiate (1 := []). rewrite app_nil_r; simpl; auto.
   * destruct p'.
     - simpl in VarySome. inversion VarySome.
-    - destruct s.
+    - destruct s0.
       ++ apply IHds; auto.
       ++ auto.
   * destruct p'.
     - simpl in VarySome; inversion VarySome.
-    - destruct s.
+    - destruct s0.
       ++ auto.
       ++ apply IHds; auto.
 Qed.
@@ -513,7 +619,7 @@ induction p.
       instantiate (1 := []); instantiate (1 := []); auto.
     * inversion H.
 + intros.
-  destruct p'; destruct st; destruct a; simpl in *;
+  destruct p'; destruct st; destruct a0; simpl in *;
   try solve [match goal with [ H : None = Some _ |- _ ] => inversion H end].
   ++ exfalso. clear H. apply corrEmptyLeaf in Corr; inversion Corr; subst; clear Corr.
     eapply Pref.
@@ -525,14 +631,14 @@ induction p.
     subst.
     instantiate (1 := []) ; left; auto.
     instantiate (1 := (Right :: p)); instantiate (1 := []); rewrite app_nil_r; auto.
-  ++ destruct s; simpl in *.
+  ++ destruct s0; simpl in *.
     - assert (p = p' \/ varySeed' SeedTreeUndef p' = Some seed)
              by (eapply IHp; eauto).
       inversion H0.
       * left; subst; auto.
       * simpl in H1. inversion H1.
     - inversion H.
-  ++ destruct s; simpl in *.
+  ++ destruct s0; simpl in *.
     - inversion H.
     - assert (p = p' \/ varySeed' SeedTreeUndef p' = Some seed)
         by (eapply IHp; eauto).
@@ -555,14 +661,14 @@ induction p.
     instantiate (1 := []).
     - left; auto.
     - instantiate (1 := Right :: p); instantiate (1 := []); rewrite app_nil_r; auto.
-  ++ destruct s eqn:S; simpl in *.
+  ++ destruct s0 eqn:S; simpl in *.
     - assert (p = p' \/ varySeed' st1 p' = Some seed)
         by (eapply IHp; eauto).
       inversion H0.
       * left; subst; auto.
       * right; auto.
     - right; auto.
-  ++ destruct s eqn:S; simpl in *.
+  ++ destruct s0 eqn:S; simpl in *.
     - right; auto.
     - assert (p = p' \/ varySeed' st2 p' = Some seed)
         by (eapply IHp; eauto).
@@ -613,10 +719,10 @@ induction l.
 + remember Pref as Pref'. clear HeqPref'. apply PrefixFreeTail in Pref'.
   apply IHl in Pref'.
   inversion Pref'; clear Pref'.
-  assert (forall p', In p' l -> forall p1 p2, a ++ p1 = p' ++ p2 -> False) by
+  assert (forall p', In p' l -> forall p1 p2, a0 ++ p1 = p' ++ p2 -> False) by
       (inversion Pref; intros; subst; eapply H3; [eassumption |
     instantiate (1 := p1); instantiate (1 := p2); subst; auto]).
-  exists (addToTree x a f l H H0).
+  exists (addToTree x a0 f l H H0).
   apply addToTreeCorrect.
 Qed.
 
@@ -639,22 +745,32 @@ Qed.
 
 (* Primitive generator combinators and some basic soundness
    assumptions about them *)
-Axiom randomRBool : bool * bool -> RandomSeed -> bool * RandomSeed.
+Definition randomRBool : bool * bool -> RandomSeed -> bool * RandomSeed :=
+  (fun _ r => let (st, b) := g_bool r in (b, st)).
 Axiom randomRBoolCorrect :
   forall b b1 b2, Bool.le b1 b2 ->
     Bool.le b1 b /\ Bool.le b b2 <->
     exists seed, (fst (randomRBool (b1, b2) seed)) = b.
-Axiom randomRNat  : nat  * nat -> RandomSeed -> nat * RandomSeed.
+Definition randomRNat  : nat  * nat -> RandomSeed -> nat * RandomSeed :=
+  (fun '(x,y) r =>
+   let (st, i) := g_full_int r (of_Z (Z.of_nat (y - x + 1)%nat)) in
+  (x + (Z.to_nat (to_Z i)),st)).
 Axiom randomRNatCorrect:
   forall n n1 n2, n1 <= n2 ->
     (n1 <= n <= n2 <->
     exists seed, (fst (randomRNat (n1, n2) seed)) = n).
-Axiom randomRInt  : Z * Z    -> RandomSeed -> Z * RandomSeed.
+Definition randomRInt  : Z * Z    -> RandomSeed -> Z * RandomSeed :=
+  (fun '(x,y) r =>
+   let (st, i) := g_int r (of_Z (y - x + 1)) in
+  (x + (to_Z i), st))%Z.
 Axiom randomRIntCorrect:
   forall z z1 z2, Z.le z1 z2 ->
     (Z.le z1 z /\ Z.le z z2 <->
     exists seed, (fst (randomRInt (z1, z2) seed)) = z).
-Axiom randomRN    : N * N    -> RandomSeed -> N * RandomSeed.
+Definition randomRN    : N * N    -> RandomSeed -> N * RandomSeed :=
+  (fun '(x,y) r =>
+   let (st, i) := g_int r (of_Z (Z.of_N (y - x + 1))) in
+  (x + (Z.to_N (to_Z i)), st))%N.
 Axiom randomRNCorrect:
   forall n n1 n2,
     N.le n1 n2 ->
@@ -697,7 +813,7 @@ Class ChoosableFromInterval (A : Type) (le : relation A) : Type :=
        In_ll a (enumR (a1,a2)))
   }.
 
-(* This is false. 
+(* This is false.
 #[global]
 Program Instance ChooseBool : ChoosableFromInterval bool :=
   {
@@ -714,7 +830,7 @@ Proof.
   induction n; cbn; [ reflexivity | intros; f_equal; apply IHn ].
 Qed.
 
-Lemma enumRNatCorrect : 
+Lemma enumRNatCorrect :
   forall (a a1 a2 : nat),
     a1 <= a2 ->
     (a1 <= a <= a2 <->

@@ -2,7 +2,7 @@ Require Import Extraction.
 Require Import Ltac.
 
 #if COQ_VERSION >= (8, 16, 0)
-Declare ML Module "coq-quickchick.plugin".
+Declare ML Module "quickchick_plugin:coq-quickchick.plugin".
 #else
 Declare ML Module "quickchick_plugin".
 #endif
@@ -22,7 +22,7 @@ Require Export Checker.
 Require Export Test.
 Require Export ExtractionQC.
 Require Export Decidability.
-Require Export Classes. 
+Require Export Classes.
 Require Export Instances.
 Require Export DependentClasses.
 Require Export Typeclasses.
