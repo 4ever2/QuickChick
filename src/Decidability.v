@@ -20,7 +20,7 @@ Set Bullet Behavior "Strict Subproofs".
 Class DecOpt (P : Prop) := { decOpt : nat -> option bool }.
 
 
-Axiom checkable_size_limit : nat.
+Definition checkable_size_limit : nat := 100.
 Extract Constant checkable_size_limit => "10000".
 
 (* Discard tests that run further than the limit *)

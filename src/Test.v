@@ -29,16 +29,16 @@ Record Args := MkArgs {
   analysis   : bool
 }.
 
-Definition updMaxSize (a : Args) (x : nat) : Args := 
-  let '(MkArgs r msc md msh msz c an) := a in 
+Definition updMaxSize (a : Args) (x : nat) : Args :=
+  let '(MkArgs r msc md msh msz c an) := a in
   MkArgs r msc md msh x c an.
 
-Definition updMaxSuccess (a : Args) (x : nat) : Args := 
-  let '(MkArgs r msc md msh msz c an) := a in 
+Definition updMaxSuccess (a : Args) (x : nat) : Args :=
+  let '(MkArgs r msc md msh msz c an) := a in
   MkArgs r x md msh msz c an.
 
-Definition updAnalysis (a : Args) (b : bool) : Args := 
-  let '(MkArgs r msc md msh msz c an) := a in 
+Definition updAnalysis (a : Args) (b : bool) : Args :=
+  let '(MkArgs r msc md msh msz c an) := a in
   MkArgs r msc md msh msz c b.
 
 
@@ -56,15 +56,15 @@ Definition isSuccess (r : Result) : bool :=
   end.
 
 (* Representing large constants in Coq is not a good idea... :) *)
-Axiom defNumTests    : nat.
+Definition defNumTests    : nat := 200.
 Extract Constant defNumTests    => "10000".
-Axiom defNumDiscards : nat.
+Definition defNumDiscards : nat := 400.
 Extract Constant defNumDiscards => "(2 * defNumTests)".
-Axiom defNumShrinks  : nat.
+Definition defNumShrinks  : nat := 100.
 Extract Constant defNumShrinks  => "1000".
-Axiom defSize        : nat.
+Definition defSize        : nat := 7.
 Extract Constant defSize        => "7".
-Definition doAnalysis       := false.
+Definition doAnalysis           := false.
 
 Definition stdArgs := MkArgs None defNumTests defNumDiscards
                              defNumShrinks defSize true doAnalysis.
@@ -133,7 +133,7 @@ Definition doneTesting (st : State) : Result :=
  if expectedFailure st then
     Success (numSuccessTests st + 1) (numDiscardedTests st) (summary st)
             (
-              if (stDoAnalysis st) 
+              if (stDoAnalysis st)
                 then ("""result"": ""success"", ""tests"": " ++ (show (numSuccessTests st)) ++ ", ""discards"": " ++ (show (numDiscardedTests st)))
                 else ("+++ Passed " ++ (show (numSuccessTests st)) ++ " tests (" ++ (show (numDiscardedTests st)) ++ " discards)" ++ newline)
             )
@@ -141,7 +141,7 @@ Definition doneTesting (st : State) : Result :=
   else
     NoExpectedFailure (numSuccessTests st) (summary st)
                   (
-                    if (stDoAnalysis st) 
+                    if (stDoAnalysis st)
                       then ("""result"": ""expected_failure"", ""tests"": " ++ (show (numSuccessTests st)))
                       else ("*** Failed! Passed " ++ (show (numSuccessTests st))++ " tests (expected Failure)" ++ newline)
                   ).
@@ -150,9 +150,9 @@ Definition doneTesting (st : State) : Result :=
 Definition giveUp (st : State) : Result :=
   GaveUp (numSuccessTests st) (summary st)
           (
-            if (stDoAnalysis st) 
+            if (stDoAnalysis st)
               then ("""result"": ""gave_up"", ""tests"":" ++ (show (numSuccessTests st)) ++ ", ""discards"": " ++ (show (numDiscardedTests st)))
-              else ("*** Gave up! Passed only " ++ (show (numSuccessTests st)) ++ " tests" ++ 
+              else ("*** Gave up! Passed only " ++ (show (numSuccessTests st)) ++ " tests" ++
                     newline ++ "Discarded: " ++ (show (numDiscardedTests st)) ++ newline)
           ).
 Definition callbackPostTest (st : State) (res : Checker.Result) : nat :=
@@ -165,7 +165,7 @@ Definition callbackPostTest (st : State) (res : Checker.Result) : nat :=
                  | _ => acc
                  end) c 0
   end.
-  
+
 
 Definition callbackPostFinalFailure (st : State) (res : Checker.Result)
 : nat :=
@@ -189,11 +189,11 @@ Fixpoint localMin (st : State) (r : Rose Checker.Result)
           let zero := callbackPostFinalFailure st res in
           (numSuccessShrinks st + zero, res)
         | cons ((MkRose res' _) as r') ts' =>
-          let zero := callbackPostTest st res in 
+          let zero := callbackPostTest st res in
           match ok res' with
             | Some x =>
-              let consistent_tags := 
-                match result_tag res, result_tag res' with 
+              let consistent_tags :=
+                match result_tag res, result_tag res' with
                 | Some t1, Some t2 => if string_dec t1 t2 then true else false
                 | None, None => true
                 | _, _ => false
@@ -231,19 +231,19 @@ Fixpoint runATest (st : State) (f : nat -> RandomSeed -> QProp) (maxSteps : nat)
         match res with
         | MkResult (Some x) e reas _ s _ t =>
           if x then (* Success *)
-            let ls' := 
-                match s with 
-                | nil => ls 
-                | _ => 
-                  let s_to_add := 
-                      ShowFunctions.string_concat 
+            let ls' :=
+                match s with
+                | nil => ls
+                | _ =>
+                  let s_to_add :=
+                      ShowFunctions.string_concat
                         (ShowFunctions.intersperse " , "%string s) in
-                  match Map.find s_to_add ls with 
+                  match Map.find s_to_add ls with
                     | None   => Map.add s_to_add (res_cb + 1) ls
                     | Some k => Map.add s_to_add (k+1) ls
-                  end 
+                  end
                 end in
-(*                  
+(*
             let ls' := fold_left (fun stamps stamp =>
                                     let oldBind := Map.find stamp stamps in
                                     match oldBind with
@@ -253,13 +253,13 @@ Fixpoint runATest (st : State) (f : nat -> RandomSeed -> QProp) (maxSteps : nat)
                                  ) s ls in*)
             test (MkState mst mdt ms cs (nst + 1) ndt ls' e rnd2 nss nts ana)
           else (* Failure *)
-            let tag_text := 
-                match t with 
+            let tag_text :=
+                match t with
                 | Some s => "Tag: " ++ s ++ nl
-                | _ => "" 
-                end in 
+                | _ => ""
+                end in
             let pre : string := (
-                                  if ana 
+                                  if ana
                                     then (
                                       if expect res then """result"": ""failed"", "
                                       else """result"": ""expected_failure"" "
@@ -271,7 +271,7 @@ Fixpoint runATest (st : State) (f : nat -> RandomSeed -> QProp) (maxSteps : nat)
                                  )%string in
             let (numShrinks, res') := localMin st (MkRose res ts) in
             let suf := (
-                        if ana 
+                        if ana
                           then (
                               """tests"": " ++ (show (S nst)) ++ ", ""shrinks"": "
                               ++ (show numShrinks) ++ ", ""discards"": "
@@ -401,7 +401,7 @@ Axiom withInstrumentation : (unit -> option bool) -> (option bool * (bool * nat)
 Extract Constant withInstrumentation => "withInstrumentation".
 
 (* After this many random consecutive tests, control flow returns to saved seeds. *)
-Axiom random_fuel : nat.
+Definition random_fuel : nat := 500.
 Extract Constant random_fuel => "1000".
 
 Fixpoint pick_next_aux pick_fuel {A} (gen : G A) (fuzz : A -> G A) fs ds fsq dsq randoms saved :=
@@ -419,7 +419,7 @@ Fixpoint pick_next_aux pick_fuel {A} (gen : G A) (fuzz : A -> G A) fs ds fsq dsq
       (* Then: If no favorites exist, check if there are still favorites in the queue. *)
       match fsq with
       (* If not, go to the discards. *)
-      | [] => 
+      | [] =>
         match ds with
         (* If we have fuzzed this (discarded) seed to completion, randomly generate a new test. *)
         | ((O, _)::ds') => (gen, fs, ds', fsq, dsq, randoms, saved)
@@ -454,7 +454,7 @@ Definition doneTestingFuzz (x : nat) st := doneTesting st.
 Axiom clear_queues : nat -> bool.
 Extract Constant clear_queues => "(fun n -> n land 1023 == 0)".
 
-(* Keep two lists for seeds: 
+(* Keep two lists for seeds:
    favored  : contains _successful_ runs and their energy.
    discards : contains _discarded_ runs and their energy (lower priority)
 
@@ -468,14 +468,14 @@ Fixpoint fuzzLoopAux {A} (fuel : nat) (st : State)
          (gen : G A) (fuzz : A -> G A) (print : A -> string)
          (prop : A -> option bool) : Result :=
   match fuel with
-  | O => giveUp st 
-  | S fuel' => 
+  | O => giveUp st
+  | S fuel' =>
     if (gte (numSuccessTests st) (maxSuccessTests st)) then
       let x : nat := printnvb tt in
       doneTestingFuzz (trace (show x) x) st
     else if (gte (numDiscardedTests st) (maxDiscardedTests st)) then
       giveUp st
-    else 
+    else
     let size := (computeSize st) (numSuccessTests st) (numDiscardedTests st) in
     let (rnd1, rnd2) := randomSplit (randomSeed st) in
     (* How to decide between generation and fuzzing? *)
@@ -489,11 +489,11 @@ Fixpoint fuzzLoopAux {A} (fuel : nat) (st : State)
     (* TODO: These recursive calls are a place to hold depth/handicap information as well.*)
     let '(res, (is_interesting, energy)) := withInstrumentation (fun _ : unit => prop a) in
     let zero_0 := 0 in (* trace (show res ++ nl) 0 in*)
-    match res with                                                     
+    match res with
     | Some true =>
       match clear_queues fuel with
       | true => fuzzLoopAux fuel' (updSuccTests st S) nil nil nil nil randoms' nil gen fuzz print prop
-      | _ => 
+      | _ =>
         if is_interesting then
           (* Successful and interesting, keep in favored queue and save! *)
           fuzzLoopAux fuel' (updSuccTests st S) favored' discards' ((energy, a)::favored_queue') discard_queue' randoms' ((energy,a) :: saved') gen fuzz print prop
@@ -515,10 +515,10 @@ Fixpoint fuzzLoopAux {A} (fuel : nat) (st : State)
     | None =>
       match clear_queues fuel with
       | true => fuzzLoopAux fuel' (updDiscTests st S) nil nil nil nil randoms' nil gen fuzz print prop
-      | _ => 
+      | _ =>
         if is_interesting then
           (* Interesting (new path), but discard. Put in discard queue *)
-          fuzzLoopAux fuel' (updDiscTests st S) favored' discards' favored_queue' ((energy, a)::discard_queue') randoms' saved' gen fuzz print prop 
+          fuzzLoopAux fuel' (updDiscTests st S) favored' discards' favored_queue' ((energy, a)::discard_queue') randoms' saved' gen fuzz print prop
           (* fuzzLoopAux fuel' (updDiscTests st S) favored' discards' favored_queue' discard_queue' gen fuzz print prop  *)
         else
           (* Not interesting + discard. Throw away. *)
