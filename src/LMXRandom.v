@@ -108,3 +108,44 @@ Definition g_full_int st bound :=
   int_aux st bound (if bound <=? max_int31 then max_int31
                     else if bound <=? max_int32 then max_int32
                     else max_int).
+
+
+Section QC.
+  Lemma state_inhabited : inhabited state.
+  Proof.
+    constructor.
+    exact (LMXRandom.make_self_init tt).
+  Qed.
+
+  Definition randomNext (st: state) : Z * state :=
+    let (st, i) := bits st in
+    (to_Z i, st).
+
+  Definition mkRandomSeed (i : Z) : state :=
+    let i := of_Z i in
+    init i i i i.
+
+  Definition newRandomSeed : state :=
+    make_self_init ().
+
+  Definition randomSplit (st : state) : state * state :=
+    split st.
+
+  Definition randomRBool : bool * bool -> state -> bool * state :=
+    (fun _ r => let (st, b) := g_bool r in (b, st)).
+
+  Definition randomRNat : nat * nat -> state -> nat * state :=
+    (fun '(x,y) r =>
+    let (st, i) := g_full_int r (of_Z (Z.of_nat (y - x + 1))) in
+    (x + (Z.to_nat (to_Z i)),st))%nat.
+
+  Definition randomRInt : Z * Z -> state -> Z * state :=
+    (fun '(x,y) r =>
+    let (st, i) := g_int r (of_Z (y - x + 1)) in
+    (x + (to_Z i), st))%Z.
+
+  Definition randomRN : N * N -> state -> N * state :=
+    (fun '(x,y) r =>
+    let (st, i) := g_int r (of_Z (Z.of_N (y - x + 1))) in
+    (x + (Z.to_N (to_Z i)), st))%N.
+End QC.

@@ -1,22 +1,22 @@
 From Coq Require Import Relations RelationClasses BoolOrder ssreflect ssrfun Lia ZArith NArith.
 From QuickChick Require Import LazyList Tactics.
 Set Bullet Behavior "Strict Subproofs".
+From QuickChick Require LMXRandom.
+
 
 (* We axiomatize a random number generator
    (currently written in OCaml only) *)
-Axiom RandomSeed : Type.
-Axiom randomSeed_inhabited : inhabited RandomSeed.
+Definition RandomSeed : Type := LMXRandom.state.
+Definition randomSeed_inhabited : inhabited RandomSeed := LMXRandom.state_inhabited.
 
-Axiom randomNext     : RandomSeed -> Z * RandomSeed.
-Axiom randomGenRange : RandomSeed -> Z * Z.
-Axiom mkRandomSeed   : Z          -> RandomSeed.
-Axiom newRandomSeed  : RandomSeed.
+Definition randomNext     : RandomSeed -> Z * RandomSeed := LMXRandom.randomNext.
+Axiom randomGenRange      : RandomSeed -> Z * Z.
+Definition mkRandomSeed   : Z          -> RandomSeed := LMXRandom.mkRandomSeed.
+Definition newRandomSeed  : RandomSeed := LMXRandom.newRandomSeed.
 
-(* begin randomSplitAssumption *)
-Axiom randomSplit : RandomSeed -> RandomSeed * RandomSeed.
+Definition randomSplit    : RandomSeed -> RandomSeed * RandomSeed := LMXRandom.randomSplit.
 Axiom randomSplitAssumption :
   forall s1 s2 : RandomSeed, exists s, randomSplit s = (s1,s2).
-(* end randomSplitAssumption *)
 
 CoInductive RandomSeedTree :=
 | RstNode : RandomSeed -> RandomSeedTree -> RandomSeedTree -> RandomSeedTree.
@@ -206,7 +206,7 @@ Lemma corrEmptyLeaf : forall s l f, correspondingSeedTree l f (SeedTreeLeaf s) -
     - destruct s0 eqn : S0.
       * apply PrefixFreeWithNil in Pref; subst; auto.
       * pose proof (In_Vary (s1 :: s2)) as Hyp; clear In_Vary.
-        
+
         inversion Pref.
         fireInLeft Hyp'. simpl in Hyp'. inversion Hyp'.
 
@@ -639,22 +639,22 @@ Qed.
 
 (* Primitive generator combinators and some basic soundness
    assumptions about them *)
-Axiom randomRBool : bool * bool -> RandomSeed -> bool * RandomSeed.
+Definition randomRBool : bool * bool -> RandomSeed -> bool * RandomSeed := LMXRandom.randomRBool.
 Axiom randomRBoolCorrect :
   forall b b1 b2, Bool.le b1 b2 ->
     Bool.le b1 b /\ Bool.le b b2 <->
     exists seed, (fst (randomRBool (b1, b2) seed)) = b.
-Axiom randomRNat  : nat  * nat -> RandomSeed -> nat * RandomSeed.
+Definition randomRNat  : nat  * nat -> RandomSeed -> nat * RandomSeed := LMXRandom.randomRNat.
 Axiom randomRNatCorrect:
   forall n n1 n2, n1 <= n2 ->
     (n1 <= n <= n2 <->
     exists seed, (fst (randomRNat (n1, n2) seed)) = n).
-Axiom randomRInt  : Z * Z    -> RandomSeed -> Z * RandomSeed.
+Definition randomRInt  : Z * Z    -> RandomSeed -> Z * RandomSeed := LMXRandom.randomRInt.
 Axiom randomRIntCorrect:
   forall z z1 z2, Z.le z1 z2 ->
     (Z.le z1 z /\ Z.le z z2 <->
     exists seed, (fst (randomRInt (z1, z2) seed)) = z).
-Axiom randomRN    : N * N    -> RandomSeed -> N * RandomSeed.
+Definition randomRN    : N * N    -> RandomSeed -> N * RandomSeed := LMXRandom.randomRN.
 Axiom randomRNCorrect:
   forall n n1 n2,
     N.le n1 n2 ->
@@ -697,7 +697,7 @@ Class ChoosableFromInterval (A : Type) (le : relation A) : Type :=
        In_ll a (enumR (a1,a2)))
   }.
 
-(* This is false. 
+(* This is false.
 #[global]
 Program Instance ChooseBool : ChoosableFromInterval bool :=
   {
@@ -714,7 +714,7 @@ Proof.
   induction n; cbn; [ reflexivity | intros; f_equal; apply IHn ].
 Qed.
 
-Lemma enumRNatCorrect : 
+Lemma enumRNatCorrect :
   forall (a a1 a2 : nat),
     a1 <= a2 ->
     (a1 <= a <= a2 <->
