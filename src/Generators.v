@@ -19,13 +19,13 @@ Import ListNotations.
 Local Open Scope set_scope.
 
 Inductive GenType (A:Type) : Type := MkGen : (nat -> RandomSeed -> A) -> GenType A.
-  
+
 Definition G := GenType.
 
 (** * Primitive generator combinators *)
-  
+
 Definition run {A : Type} (g : G A) := match g with MkGen f => f end.
-  
+
 Definition returnGen {A : Type} (x : A) : G A :=
   MkGen (fun _ _ => x).
 
@@ -78,12 +78,12 @@ Definition chooseGen {A : Type} {le} `{ChoosableFromInterval A le} (range : A * 
   super := MonadGen;
 
   sample := sampleGen;
-  
-  sized  := @sizedGen; 
+
+  sized  := @sizedGen;
   resize := @resizeGen;
 
   choose := @chooseGen;
-  
+
   semProdSize := @semGenSize;
 
   (* Probably belongs in another class for modularity? *)
@@ -122,16 +122,16 @@ Definition promote {A : Type} (m : Rose (G A)) : G (Rose A) :=
     MkGen (fun n r => fmapRose (fun g => run g n r) m).
 
 (* Generator specific - coarbitrary support. *)
-Definition variant {A : Type} (p : SplitPath) (g : G A) : G A := 
-    match g with 
+Definition variant {A : Type} (p : SplitPath) (g : G A) : G A :=
+    match g with
       | MkGen f => MkGen (fun n r => f n (varySeed p r))
     end.
-  
+
 Definition reallyUnsafeDelay {A : Type} : G (G A -> A) :=
     MkGen (fun r n g => (match g with MkGen f => f r n end)).
-  
+
 Definition reallyUnsafePromote {r A : Type} (m : r -> G A) : G (r -> A) :=
-    (bindGen reallyUnsafeDelay (fun eval => 
+    (bindGen reallyUnsafeDelay (fun eval =>
                                   returnGen (fun r => eval (m r)))).
 
 Lemma promoteVariant :
@@ -143,7 +143,9 @@ Lemma promoteVariant :
 Proof.
     move => A B a p g size r r1 r2 H.
     rewrite /reallyUnsafePromote /variant.
-    destruct g. rewrite /= H. by [].
+    destruct g. unfold bindGen.
+    cbn -[randomSplit].
+    destruct randomSplit. inversion H. by [].
 Qed.
 
 Lemma semPromote A (m : Rose (G A)) :
@@ -166,11 +168,11 @@ Lemma semChooseSizeGen A {le} `{ChoosableFromInterval A le} (a1 a2 : A) :
     forall size, semProdSize (choose (a1,a2)) size <-->
                        [set a | le a1 a /\ le a a2].
 Proof. by move=> /= le_a1a2 m n; rewrite (randomRCorrect n a1 a2). Qed.
-  
+
 #[global] Instance chooseUnsized {A} {le} `{RandomQC.ChoosableFromInterval A le} (a1 a2 : A) :
     Unsized (choose (a1, a2)).
 Proof. by []. Qed.
-  
+
 Lemma semChooseGen A {le} `{RandomQC.ChoosableFromInterval A le} (a1 a2 : A) :
     le a1 a2 ->
     (semProd (choose (a1,a2)) <--> [set a | le a1 a /\ le a a2]).
@@ -254,7 +256,7 @@ Fixpoint pickDrop {A : Type} (xs : list (nat * G (option A))) n : nat * G (optio
       if (n < k) then  (k, x, xs)
       else let '(k', x', xs') := pickDrop xs (n - k)
            in (k', x', (k,x)::xs')
-  end. 
+  end.
 
 Definition sum_fst {A : Type} (gs : list (nat * A)) : nat :=
   foldl (fun t p => t + (fst p)) 0 gs.
@@ -266,17 +268,17 @@ Definition freq_ {A : Type} (def : G A) (gs : list (nat * G A))
   @snd _ _ (pick def gs n)).
 
 (*
-Definition frequency {A}:= 
+Definition frequency {A}:=
   @deprecate (G A -> list (nat * G A) -> G A) "frequency" "freq_" freq_.
  *)
 
 Fixpoint backtrackFuel {A : Type} (fuel : nat) (tot : nat) (gs : list (nat * G (option A))) : G (option A) :=
-  match fuel with 
+  match fuel with
     | O => ret None
-    | S fuel' => bindGen (choose (0, tot-1)) (fun n => 
+    | S fuel' => bindGen (choose (0, tot-1)) (fun n =>
                  let '(k, g, gs') := pickDrop gs n in
                  bindGen g (fun ma =>
-                 match ma with 
+                 match ma with
                    | Some a => ret (Some a)
                    | None => backtrackFuel fuel' (tot - k) gs'
                  end ))
@@ -339,7 +341,7 @@ Proof.
   exact: randomSeed_inhabited.
     by do 2! constructor.
 Qed.
-  
+
 Lemma semReturnSizeGen A (x : A) (s : nat) :
   semProdSize (ret x) s <--> [set x].
 Proof.
@@ -380,7 +382,7 @@ Proof. by case: g => g; rewrite /semGenSize. Qed.
 #[global] Instance ProducerSemanticsGen :
   @ProducerSemantics G ProducerGen :=
   {
-  semReturn     := @semReturnGen; 
+  semReturn     := @semReturnGen;
   semReturnSize := @semReturnSizeGen;
   semBindSize   := @semBindSizeGen;
   semChoose     := @semChooseGen;
@@ -437,7 +439,7 @@ Qed.
 
 Lemma sum_fst_eq0P {A} (l : list (nat * A)) :
   sum_fst l = 0 <->
-  [seq x <- l | x.1 != 0] = [::].  
+  [seq x <- l | x.1 != 0] = [::].
 Proof.
 by elim: l => [|[[|n] x] l IHl] //=; split=> //; rewrite sum_fstE.
 Qed.
@@ -496,7 +498,7 @@ Proof.
 Qed.
 
 Lemma pick_imset A (def : G A) l :
-  pick def l @: [set m | m < sum_fst l] <--> [seq x <- l | x.1 != 0]. 
+  pick def l @: [set m | m < sum_fst l] <--> [seq x <- l | x.1 != 0].
 Proof.
 elim: l => [|[n x] l IHl] /=.
   rewrite /sum_fst /=.
@@ -566,7 +568,7 @@ Proof.
   - move => [k [g [gs [HIn [Hpick [Hneq _]]]]]].
     remember (n < sum_fst l).
     case: b  Heqb => //= /not_lt/pickDrop_def H.
-    rewrite H in Hpick. 
+    rewrite H in Hpick.
     inversion Hpick; subst; eauto.
 Qed.
 
@@ -583,7 +585,7 @@ Proof.
     rewrite H.
       by split => //=.
   + move/(_ H2) : IHxs => [n [l' Hpick]].
-    exists (n + i). exists ((i,g)::l'). 
+    exists (n + i). exists ((i,g)::l').
     rewrite -[X in _ < X]add0n ltn_add2r ltn0.
     rewrite  -[X in _ - X]add0n subnDr subn0.
     by rewrite Hpick.
@@ -606,7 +608,7 @@ Proof.
     rewrite sum_fstE. now ssromega.
     now ssromega.
   + move/(_ H2) : IHxs => [n [l' [Hpick [Hlt Hlen]]]].
-    exists (n + i). exists ((i,g)::l'). 
+    exists (n + i). exists ((i,g)::l').
     rewrite -[X in _ < X]add0n ltn_add2r ltn0.
     rewrite  -[X in _ - X]add0n subnDr subn0.
     rewrite Hpick. simpl.
@@ -662,7 +664,7 @@ Proof.
   - apply unsizedMonotonic.
     apply chooseUnsized.
   - intros x Heq. eapply semChooseGenNat in Heq; eauto.
-  move : Heq => /andP [Hep1 Heq2]. 
+  move : Heq => /andP [Hep1 Heq2].
   destruct (sum_fst lg) eqn:Heq.
   + rewrite pick_def. eassumption.
     subst. ssromega.
@@ -688,62 +690,62 @@ Proof.
   constructor 2. eassumption.
 Qed.
 
-End FrequencyProof.  
+End FrequencyProof.
 
 Lemma backtrack_correct_size_opt {A} (lst : list (nat * G (option A))) s :
   semProdSizeOpt (backtrack lst) s <-->
-  \bigcup_(x in lst :&: (fun x => x.1 <> 0)) (fun g => semProdSizeOpt (snd g) s) x.  
+  \bigcup_(x in lst :&: (fun x => x.1 <> 0)) (fun g => semProdSizeOpt (snd g) s) x.
 Proof.
   unfold backtrack.
   assert (Hret := @semReturnSize G _ _ (option A)).
-  assert (Hbind := @semBindSize G _ _). simpl in *. 
-  
+  assert (Hbind := @semBindSize G _ _). simpl in *.
 
-  assert (sum_fst lst = sum_fst lst)%coq_nat by reflexivity.  
+
+  assert (sum_fst lst = sum_fst lst)%coq_nat by reflexivity.
   revert H.
-  assert (Datatypes.length lst = Datatypes.length lst)%coq_nat by reflexivity.  
+  assert (Datatypes.length lst = Datatypes.length lst)%coq_nat by reflexivity.
   revert H.
-  
+
   generalize (sum_fst lst) at 1 3.
   generalize (Datatypes.length lst) at 1 3.
-  
+
   intros n1. generalize lst. induction n1; intros l n2 Heq1 Heq2.
   - simpl. intros x; split; intros Hin.
     + eapply semReturnSizeOpt_None in Hin; eauto with typeclass_instances. inv Hin.
     + inv Hin. inv H. destruct l; try (simpl in *; congruence). inv H0.
       inv H2.
   - intros x; split; intros Hin.
-    + with_strategy opaque [pickDrop] (simpl in Hin). 
+    + with_strategy opaque [pickDrop] (simpl in Hin).
       eapply Hbind in Hin.
       inv Hin. inv H.
       eapply semChooseSizeGen in H0; eauto. simpl in *.
-      
+
     (*   destruct (pickDrop_exists l x). simpl in *. destruct H4.       *)
 
     (*   now lia. *)
     (*   destruct H1. destruct H4. destruct H4. destruct H6. destruct H7. *)
-      
+
     (*   rewrite H4 in H3. *)
-      
+
     (*   eapply Hbind in H3. *)
     (*   destruct H2. destruct H3. destruct H2. *)
     (*   destruct x2. *)
-      
-      
+
+
     (*   -- eapply Hret in H3. *)
     (*      inv H3. *)
-         
+
     (*      eexists. split.  eassumption. *)
     (*      constructor; eauto. *)
-         
+
     (*   -- assert (Hsem : (isSome :&: semProdSize *)
     (*                             (enumerateFuel n (n.+1 - 1) *)
     (*                                            x1) s) (Some a)). *)
     (*      { split; eauto. } *)
-         
+
     (*      assert (Heq' : (n.+1 - 1) = n). *)
     (*      { ssromega. } *)
-         
+
     (*      rewrite Heq' in Hsem. *)
     (*      eapply IHn in Hsem. *)
     (*      inv Hsem. destruct H9. *)
@@ -755,10 +757,10 @@ Proof.
     (*   constructor. now eauto. *)
     (*   simpl.  *)
     (*   eapply Hbind. *)
-      
+
     (*   destruct (pickDrop_In _ _ H0). destruct H4. *)
     (*   destruct H4. *)
-      
+
     (*   exists x. split. *)
     (*   eapply Enumerators.semChooseSize; eauto. *)
     (*   simpl. now ssromega.  *)
@@ -769,11 +771,11 @@ Proof.
     (*   exists (Some a). split. *)
     (*   eassumption. *)
     (*   eapply Hret. reflexivity.  *)
-Admitted. (* TODO bring back to life *)       
+Admitted. (* TODO bring back to life *)
 
 
 Lemma backtrack_correct_opt {A} (lst : list (nat * G (option A))) :
-  semProdOpt (backtrack lst) <--> \bigcup_(x in lst :&: fun x => x.1 <> 0) (semProdOpt x.2). 
+  semProdOpt (backtrack lst) <--> \bigcup_(x in lst :&: fun x => x.1 <> 0) (semProdOpt x.2).
 Proof.
   split; intros H.
   - inv H. inv H0.
@@ -787,7 +789,7 @@ Proof.
     assert (Hin :  (\bigcup_(x in lst :&: fun x => x.1 <> 0) (semProdSizeOpt x.2 x0)) a).
     { eexists. split; eauto. }
     eapply (@backtrack_correct_size_opt A) in Hin.
-    eexists. split; eauto. 
+    eexists. split; eauto.
 Qed.
 
 Lemma backtrack_SizeMonotonicOpt (A : Type) (l : list (nat * G (option A))) :
@@ -797,7 +799,7 @@ Proof.
   intros Hin. intros s1 s2 Hleq.
   rewrite !backtrack_correct_size_opt.
   intros x Hin'.  destruct Hin' as [e [Hl Hs]].
-  eexists. split; eauto. eapply Hin; inv Hl; eauto.  
+  eexists. split; eauto. eapply Hin; inv Hl; eauto.
 Qed.
 
 Lemma enumerate_SizeMonotonic (A : Type) (l : list (nat * G (option A))) :
@@ -812,16 +814,16 @@ Proof.
 (*   - simpl. now eauto with typeclass_instances. *)
 (*   - simpl. *)
 (*     eapply bindMonotonicStrong; eauto with typeclass_instances. *)
-    
+
 (*     intros x1 Hin. eapply Enumerators.semChoose in Hin; eauto. simpl in *.  *)
-    
+
 (*     destruct (Enumerators.pickDrop_exists l x1). simpl in *. now ssromega. *)
 (*     destruct H. destruct H. destruct H0. destruct H1. *)
 
 (*     rewrite H. *)
 
 (*     eapply bindMonotonicStrong; eauto with typeclass_instances. *)
-    
+
 (*     intros a Hin'. *)
 
 (*     destruct a; eauto with typeclass_instances.  *)
