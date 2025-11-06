@@ -25,7 +25,7 @@ let sample = mk_ref "QuickChick.Generators.sampleGen"
 let sample1 = mk_ref "QuickChick.Generators.sample1"
 
 (* Handle extra ocaml directory to be copied *)
-let empty_slist : string list = []           
+let empty_slist : string list = []
 let extra_dir : string list ref =
   Summary.ref ~name:"QC_ocaml_dir" empty_slist
 let add_extra_dir s = extra_dir := s :: !extra_dir
@@ -44,7 +44,7 @@ let set_dune_file s = dune_file := Some s
 
 let modules_to_open : string list ref =
   Summary.ref ~name:"QC_modules_to_open" empty_slist
-let add_module_to_open s = modules_to_open := s :: !modules_to_open  
+let add_module_to_open s = modules_to_open := s :: !modules_to_open
 
 (* [mkdir -p]: recursively make the parent directories if they do not exist. *)
 let rec mkdir_ dname =
@@ -59,7 +59,7 @@ let rec mkdir_ dname =
 (* Interface with OCaml compiler *)
 let temp_dirname () =
   match !extract_dir with
-  | None -> 
+  | None ->
     let dname = Filename.(concat (get_temp_dir_name ()) "QuickChick") in
     mkdir_ dname;
     dname
@@ -167,7 +167,7 @@ let define_and_run c env evd =
   (* Add any modules that have been marked "open" *)
   let open_cmd s = Printf.sprintf "awk -v n=1 -v s=\"open %s\" 'NR == n {print s} {print}' %s > %s/__qc_tmp && mv %s/__qc_tmp %s" s mlf dir dir mlf in
   List.iter (fun s -> ignore (Sys.command (open_cmd s))) !modules_to_open;
-  
+
   (* Before compiling, fix stupid cyclic dependencies like "type int = int".
      Introduced by "Definition int := int." possibly inside a module, so just
      removing it might break other definitions that depend on it.
@@ -211,7 +211,7 @@ let define_and_run c env evd =
     match !dune_file with
     | None -> "cd " ^ dir ^ " && ocamlbuild -use-ocamlfind " ^ packages ^ " -lib unix -cflags \"-w -3\" " ^ Filename.basename execn ^ " -quiet > build.log 2> build.err"
     | Some s ->
-       (* Modify the dune file to add the executable name and put it in the output dir *) 
+       (* Modify the dune file to add the executable name and put it in the output dir *)
        let awk_cmd = Printf.sprintf "awk -v n=2 -v s=\"   (name %s)\" 'NR == n {print s} {print}' %s > %s" (Filename.chop_extension (Filename.basename mlf)) s (dir ^ "/" ^ s) in
        (*       let sed_cmd = Printf.sprintf "sed '2i   (name %s)' %s > %s" (Filename.chop_extension (Filename.basename mlf)) s (dir ^ "/" ^ s) in *)
        ignore (Sys.command awk_cmd);
@@ -225,7 +225,7 @@ let define_and_run c env evd =
     | None -> Filename.dirname execn </> "_build" </> Filename.basename execn
     | Some _ -> dir ^ "/_build/default/" ^ (Filename.chop_extension (Filename.basename execn)) ^ ".exe" in
 
-  if Sys.command exec_command <> 0 then 
+  if Sys.command exec_command <> 0 then
     let build_log = read_file (dir ^ "/build.log") in
     let build_err = read_file (dir ^ "/build.err") in
     let msg = str "Could not compile test program: " ++ str mlf ++ fnl () in
@@ -237,7 +237,7 @@ let define_and_run c env evd =
 
   (* Run the test *)
   else
-    let execn = "time " ^ execn in 
+    let execn = "time " ^ execn in
     (* Should really be shared across this and the tool *)
     (*
     let (p_out, _, p_err) as process = Unix.open_process_full execn (Unix.environment ()) in
@@ -264,7 +264,7 @@ let define_and_run c env evd =
         let e = input_line p_err in
         Feedback.msg_notice (Pp.str e);
         process_err_aux() in
-*)        
+*)
       let rec process_otl_aux () =
         let e = input_line p_out in
         Feedback.msg_notice (Pp.str e);
@@ -331,20 +331,12 @@ let run ~opaque_access f args =
 let run f args =
 #endif
   let env = Global.env () in
-  let evd = Evd.from_env env in
-  begin match last args with
-  | Some qc_text ->
-    let msg = "QuickChecking " ^ Pp.string_of_ppcmds (Ppconstr.pr_constr_expr env evd qc_text) in
-    Feedback.msg_notice (Pp.str msg)
-  | None -> failwith "run called with no arguments"
-  end;
+  let sigma = Evd.from_env env in
   let args = List.map (fun x -> (x,None)) args in
   let c = CAst.make @@ CApp (f, args) in
-#if COQ_VERSION >= (8,20, 0)
-  runTest ~opaque_access c env evd
-#else
-  runTest c env evd
-#endif
+  let c = CAst.make @@ CApp (show, [(c, None)]) in
+  Feedback.msg_notice @@
+  Vernacentries.check_may_eval env sigma (Some (Genredexpr.CbvVm None)) c
 
 let set_debug_flag (flag_name : string) (mode : string) =
   let toggle =
@@ -358,14 +350,14 @@ let set_debug_flag (flag_name : string) (mode : string) =
 (*    | "Warn"  -> flag_warn
     | "Error" -> flag_error *)
   in
-  reference := toggle 
+  reference := toggle
 
 let extract_manually : qualid list ref =
   Summary.ref ~name:"QC_manual_extracts" []
 let add_manual_extract cs =
   let convert_reference_to_qualid c : qualid =
     match c with
-    | {CAst.v = CRef (r, _) ; _ } -> r 
+    | {CAst.v = CRef (r, _) ; _ } -> r
     | _ -> failwith "Usage: Extract Manually failed." in
   let refs : qualid list =
     match cs with
@@ -374,7 +366,7 @@ let add_manual_extract cs =
          let qs = List.map convert_reference_to_qualid b in
          q :: qs
        end
-    | _ -> [convert_reference_to_qualid cs] in 
+    | _ -> [convert_reference_to_qualid cs] in
   extract_manually := refs @ !extract_manually
 
 #if COQ_VERSION >= (8, 20, 0)
@@ -420,7 +412,7 @@ let qcFuzz_main prop_def temp_dir execn prop_mlf prop_mlif warnings prop fuzzLoo
 (*
   List.iter (fun x -> print_endline (string_of_qualid
                                        ((match qualid_of_reference x with {CAst.v = q; _} -> q)))) !extract_manually;
-                                       *)      
+                                       *)
   List.iter (fun r ->
       match GenericLib.sdt_rep_from_mib (GenericLib.qualid_to_mib r) with
       | Some (ty_ctr, ty_params, ctrs) -> begin
@@ -434,7 +426,7 @@ let qcFuzz_main prop_def temp_dir execn prop_mlf prop_mlif warnings prop fuzzLoo
                else [qualify (GenericLib.constructor_to_string ctr)]
             | _ -> List.map (fun (ctr,_) -> qualify (GenericLib.constructor_to_string ctr)) ctrs in
           (* List.iter print_endline ctr_names; *)
-          Extraction_plugin.Table.extract_inductive 
+          Extraction_plugin.Table.extract_inductive
             (GenericLib.tyCtrToQualid ty_ctr)
             ty_ctr_name
             ctr_names
@@ -457,11 +449,11 @@ let qcFuzz_main prop_def temp_dir execn prop_mlf prop_mlif warnings prop fuzzLoo
   let show_expr cexpr =
     CAst.make @@ CApp (show, [(cexpr,None)]) in
   let show_and_c_fun : constr_expr =
-    Constrexpr_ops.mkCLambdaN [unit_arg] 
+    Constrexpr_ops.mkCLambdaN [unit_arg]
       (let fx = fresh_name "_qc_res" in
        let fx_expr = (CAst.make @@ CRef (qualid_of_ident fx,None)) in
 
-       CAst.make @@ CLetIn (CAst.make @@ Name fx, fuzzLoop, None, 
+       CAst.make @@ CLetIn (CAst.make @@ Name fx, fuzzLoop, None,
                             CAst.make @@ CApp (pair_ctr,
                                                [(fx_expr, None);
                                                 (show_expr fx_expr, None)]))) in
@@ -513,7 +505,7 @@ let qcFuzz_main prop_def temp_dir execn prop_mlf prop_mlif warnings prop fuzzLoo
   (* ... then execute them ... *)
   ignore (Sys.command (Printf.sprintf "%s/cmdprefix.pl %s" temp_dir mlf));
   ignore (Sys.command (Printf.sprintf "%s/cmdsuffix.pl %s" temp_dir mlf));
-  
+
   (* Copy fuzz-related files to temp directory *)
   ignore (Sys.command (Printf.sprintf "cp %s/alloc-inl.h %s" user_contrib temp_dir));
   ignore (Sys.command (Printf.sprintf "cp %s/debug.h %s" user_contrib temp_dir));
@@ -533,31 +525,31 @@ let qcFuzz_main prop_def temp_dir execn prop_mlf prop_mlif warnings prop fuzzLoo
   print_endline ("Extra: " ^ extra_link_files);
    *)
   let zarith = "-I $(opam var lib)/zarith $(opam var lib)/zarith/zarith.cmxa" in
-  
+
   let ocamlopt = "ocamlopt -ccopt -Wno-error=implicit-function-declaration" in
   let comp_mli_cmd instr_flag fn =
     Printf.sprintf "%s %s unix.cmxa %s -rectypes -w a -I %s %s" ocamlopt instr_flag zarith
       (Filename.dirname fn) fn
   in
 
-  let comp_prop_ml_cmd fn = 
+  let comp_prop_ml_cmd fn =
     Printf.sprintf "%s -afl-instrument unix.cmxa str.cmxa %s -rectypes -w a -I %s %s"
       ocamlopt zarith (Filename.dirname fn) fn
-  in 
+  in
 
   let comp_exec_ml_cmd fn prop_fn execn =
     Printf.sprintf "%s unix.cmxa str.cmxa %s -rectypes -w a -I %s %s -o %s %s %s/SHM.c"
       ocamlopt zarith (Filename.dirname fn) (Filename.chop_extension prop_fn ^ ".cmx") execn fn temp_dir
-  in  
+  in
 (*  let comp_mli_cmd instr_flag fn =
     Printf.sprintf "%s %s unix.cmxa %s -rectypes -w a -I %s -I %s %s %s" ocamlopt instr_flag afl_link
       (Filename.dirname fn) path link_files fn
   in
 
-  let comp_prop_ml_cmd fn = 
+  let comp_prop_ml_cmd fn =
     Printf.sprintf "%s -afl-instrument unix.cmxa str.cmxa %s -rectypes -w a -I %s -I %s -I %s %s %s %s"
       ocamlopt afl_link (Filename.dirname fn) afl_path path link_files extra_link_files fn
-  in 
+  in
 
   let comp_exec_ml_cmd fn prop_fn execn =
     Printf.sprintf "%s unix.cmxa str.cmxa %s -rectypes -w a -I %s -I %s -I %s %s %s %s -o %s %s %s/SHM.c"
@@ -581,7 +573,7 @@ let qcFuzz_main prop_def temp_dir execn prop_mlf prop_mlif warnings prop fuzzLoo
 
   (* Copy over the main file that actually sets up the shm... *)
   ignore (Sys.command (Printf.sprintf "cp %s/Main.ml %s" user_contrib temp_dir));
-  let comp_main_cmd fn execn : string = 
+  let comp_main_cmd fn execn : string =
     Printf.sprintf "%s unix.cmxa str.cmxa -rectypes -w a -I %s -o %s %s %s/SHM.c"
       ocamlopt (Filename.dirname fn) execn fn temp_dir in
   let cmp_cmd_main = comp_main_cmd (temp_dir ^ "/Main.ml") (temp_dir ^ "/main_exec") in
@@ -617,7 +609,7 @@ let qcFuzz_main prop_def temp_dir execn prop_mlf prop_mlif warnings prop fuzzLoo
           List.iter (fun s -> (print_string s; print_newline())) result
        | _ -> failwith "LOL"
   in
-    
+
   run_and_show_output ("time " ^ temp_dir ^ "/main_exec " ^ temp_dir ^ "/qc_exec");
   print_endline (match !found_result with
                  | Some true -> "Found success!"
@@ -625,7 +617,7 @@ let qcFuzz_main prop_def temp_dir execn prop_mlf prop_mlif warnings prop fuzzLoo
                  | _ -> "Found nothing..."
     );
   !found_result
-  (* open linked ocaml files 
+  (* open linked ocaml files
   List.iter (fun (s : string * string) ->
       let (fn, c) = s in
       let sed_cmd = (Printf.sprintf "sed -i '1s;^;open %s\\n;' %s" c mlf) in
@@ -761,11 +753,3 @@ END
 VERNAC COMMAND EXTEND QCExtractDir CLASSIFIED AS SIDEFF
   | ["QCExtractDir" string(s)] -> { set_extract_dir s }
 END
-
-
-
-
-
-
-
-
