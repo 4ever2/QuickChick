@@ -1,4 +1,3 @@
-Require Import Extraction.
 Require Import Ltac.
 
 #if COQ_VERSION >= (8, 16, 0)
@@ -20,9 +19,8 @@ Require Export Generators.
 Require Export State.
 Require Export Checker.
 Require Export Test.
-Require Export ExtractionQC.
 Require Export Decidability.
-Require Export Classes. 
+Require Export Classes.
 Require Export Instances.
 Require Export DependentClasses.
 Require Export Typeclasses.

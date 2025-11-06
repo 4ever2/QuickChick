@@ -10,11 +10,6 @@
 
 (rule
   (alias compat)
-  (target ExtractionQC.v)
-  (action (run sh %{dep:../scripts/mycppo} %{dep:ExtractionQC.v.cppo} %{target})))
-
-(rule
-  (alias compat)
   (target QuickChick.v)
   (action (run sh %{dep:../scripts/mycppo} %{dep:QuickChick.v.cppo} %{target})))
 

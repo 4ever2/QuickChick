@@ -57,13 +57,9 @@ Definition isSuccess (r : Result) : bool :=
 
 (* Representing large constants in Coq is not a good idea... :) *)
 Definition defNumTests    : nat := 200.
-Extract Constant defNumTests    => "10000".
 Definition defNumDiscards : nat := 400.
-Extract Constant defNumDiscards => "(2 * defNumTests)".
 Definition defNumShrinks  : nat := 100.
-Extract Constant defNumShrinks  => "1000".
 Definition defSize        : nat := 7.
-Extract Constant defSize        => "7".
 Definition doAnalysis           := false.
 
 Definition stdArgs := MkArgs None defNumTests defNumDiscards
@@ -398,11 +394,9 @@ Definition fuzzCheck {prop : Type} {_ : Checkable prop} (p : prop) : Result :=
 
 (* HACK! This will be implemented by appending it to the beginning of the file...*)
 Axiom withInstrumentation : (unit -> option bool) -> (option bool * (bool * nat)).
-Extract Constant withInstrumentation => "withInstrumentation".
 
 (* After this many random consecutive tests, control flow returns to saved seeds. *)
 Definition random_fuel : nat := 500.
-Extract Constant random_fuel => "1000".
 
 Fixpoint pick_next_aux pick_fuel {A} (gen : G A) (fuzz : A -> G A) fs ds fsq dsq randoms saved :=
   match pick_fuel with
@@ -448,11 +442,9 @@ Fixpoint pick_next_aux pick_fuel {A} (gen : G A) (fuzz : A -> G A) fs ds fsq dsq
 Definition pick_next := @pick_next_aux 7.
 
 Axiom printnvb : unit -> nat.
-Extract Constant printnvb => "(fun u -> Printf.printf ""%d\n"" (count_non_virgin_bytes u); 42)".
 Definition doneTestingFuzz (x : nat) st := doneTesting st.
 
 Axiom clear_queues : nat -> bool.
-Extract Constant clear_queues => "(fun n -> n land 1023 == 0)".
 
 (* Keep two lists for seeds:
    favored  : contains _successful_ runs and their energy.
